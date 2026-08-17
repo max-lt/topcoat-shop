@@ -269,13 +269,17 @@ async fn product(cx: &Cx) -> Result {
     let sold_out = p.sold_out();
     let low = p.low_stock();
     let page_sku = p.sku.clone();
-    // Preselect the first size actually in stock.
-    let first_size =
-        variants.iter().find(|v| v.stock > 0).map(|v| v.size.clone()).unwrap_or_default();
+    // Preselect the first size actually in stock. The stepper's ceiling is
+    // that size's stock, not the whole reserve: a size with two left must
+    // not offer twelve.
+    let first = variants.iter().find(|v| v.stock > 0);
+    let first_size = first.map(|v| v.size.clone()).unwrap_or_default();
+    let first_stock = first.map_or(p.stock, |v| v.stock) as f64;
 
     view! {
         signal sku_sig = page_sku;
         signal size = first_size;
+        signal size_stock = first_stock;
         signal quantity = 1.0;
         signal added = 0.0;
 
@@ -361,6 +365,7 @@ async fn product(cx: &Cx) -> Result {
                                     // A signal per option: a handler can capture a
                                     // signal, never a loop variable.
                                     signal label = v.size.clone();
+                                    signal option_stock = v.stock as f64;
 
                                     if v.stock > 0 {
                                         <button
@@ -369,7 +374,13 @@ async fn product(cx: &Cx) -> Result {
                                             } else {
                                                 "min-w-14 rounded-xl px-4 py-2.5 text-sm ring-1 ring-oat-300 transition hover:ring-oat-900"
                                             })
-                                            @click=$(|_e| size.set(label.get()))>(&v.size)</button>
+                                            @click=$(|_e| {
+                                                size.set(label.get());
+                                                size_stock.set(option_stock.get());
+                                                if quantity.get() > option_stock.get() {
+                                                    quantity.set(option_stock.get());
+                                                }
+                                            })>(&v.size)</button>
                                     } else {
                                         <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
                                     }
@@ -407,8 +418,15 @@ async fn product(cx: &Cx) -> Result {
                             <button aria-label="Diminuer la quantité" class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
                                     @click=$(|_e| quantity.set(if quantity.get() > 1.0 { quantity.get() - 1.0 } else { 1.0 }))>"−"</button>
                             <span class="w-9 text-center tabular-nums">$(quantity.get())</span>
-                            <button aria-label="Augmenter la quantité" class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
-                                    @click=$(|_e| quantity.increment())>"+"</button>
+                            <button aria-label="Augmenter la quantité"
+                                    :class=$(if quantity.get() >= size_stock.get() {
+                                        "flex h-11 w-11 select-none items-center justify-center rounded-r-full text-lg text-oat-300"
+                                    } else {
+                                        "flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
+                                    })
+                                    @click=$(|_e| if quantity.get() < size_stock.get() {
+                                        quantity.increment()
+                                    })>"+"</button>
                         </div>
                         <button class=(BTN.to_string() + " h-11 px-8")
                                 @click=$(async |_e| {
