@@ -115,12 +115,19 @@ async fn register(cx: &Cx, Form(f): Form<Registration>) -> Result<SeeOther> {
 
 async fn start_session(cx: &Cx, user_id: i64) -> Result<()> {
     let session = session::start(cx).await?;
-    let left = session
-        .expires_at
-        .duration_since(std::time::SystemTime::now())
-        .unwrap_or(std::time::Duration::from_secs(60 * 60 * 24 * 30));
-    let expires_at = chrono::Utc::now()
-        + chrono::Duration::from_std(left).unwrap_or_else(|_| chrono::Duration::days(30));
+    #[cfg(feature = "native")]
+    let expires_at = {
+        let left = session
+            .expires_at
+            .duration_since(std::time::SystemTime::now())
+            .unwrap_or(std::time::Duration::from_secs(60 * 60 * 24 * 30));
+        chrono::Utc::now()
+            + chrono::Duration::from_std(left).unwrap_or_else(|_| chrono::Duration::days(30))
+    };
+    // On wasm the session clock comes from web-time; a flat month does the
+    // same work as the native calculation.
+    #[cfg(feature = "edge")]
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
 
     db::open_session(pool(cx), session.token_hash.as_ref(), user_id, expires_at).await?;
 

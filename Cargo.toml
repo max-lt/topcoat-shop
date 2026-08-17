@@ -3,16 +3,81 @@ name = "topcoat-shop"
 version = "0.1.0"
 edition = "2024"
 
+# One shop, two hosts. `native` builds the binary that serves it over
+# tokio and SQLite; `edge` builds the wasm module a Cloudflare Worker runs
+# against D1. Pages, procedures and shards are the same code either way --
+# only the data layer and the image kitchen differ.
+
+[features]
+default = ["native"]
+native = [
+    "dep:tokio",
+    "dep:sqlx",
+    "dep:image",
+    "topcoat/serve",
+    "topcoat/compression",
+    "topcoat/font",
+    "topcoat/font-fontsource",
+    "topcoat/tailwind",
+    "topcoat/multipart",
+]
+edge = [
+    "dep:worker",
+    "dep:http",
+    "dep:http-body-util",
+    "dep:time",
+    "dep:console_error_panic_hook",
+    "dep:wasm-bindgen-futures",
+    "dep:futures-channel",
+]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "topcoat-shop"
+required-features = ["native"]
+
 [dependencies]
-topcoat = { version = "0.5.0", features = ["font-fontsource", "tailwind", "multipart"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
-sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
-chrono = { version = "0.4.45", features = ["serde"] }
+topcoat = { version = "0.5.0", default-features = false, features = [
+    "router",
+    "view",
+    "runtime",
+    "session",
+    "cookie",
+    "discover",
+    "asset",
+] }
+argon2 = "0.5.3"
+chrono = { version = "0.4.45", features = ["serde", "wasmbind"] }
 rand = "0.10.2"
 serde = { version = "1.0.229", features = ["derive"] }
 anyhow = "1.0.104"
-argon2 = "0.5.3"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+tokio = { version = "1.53.1", features = [
+    "rt-multi-thread",
+    "macros",
+], optional = true }
+sqlx = { version = "0.9.0", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "macros",
+    "migrate",
+    "chrono",
+], optional = true }
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+], optional = true }
+
+worker = { version = "0.8", features = ["d1"], optional = true }
+http = { version = "1", optional = true }
+http-body-util = { version = "0.1", optional = true }
+# The cookie crate stamps removal cookies with time's now_utc(), which
+# panics on bare wasm unless time reads the clock through JS.
+time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+futures-channel = { version = "0.3", optional = true }
 
 [build-dependencies]
 topcoat = { version = "0.5.0", default-features = false, features = ["tailwind"] }
@@ -28,3 +93,7 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.flate2]
 opt-level = 3
+
+[profile.release]
+opt-level = "s"
+lto = true

@@ -4,7 +4,9 @@
 
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
-use topcoat::router::{content::multipart::Multipart, content::Form, page, path_param, route};
+#[cfg(feature = "native")]
+use topcoat::router::content::multipart::Multipart;
+use topcoat::router::{content::Form, page, path_param, route};
 use topcoat::view::{component, view};
 use topcoat::Result;
 
@@ -285,15 +287,7 @@ async fn product(cx: &Cx) -> Result {
 
                 <section class=(CARD.to_string() + " p-6")>
                     <h3 class="text-xl">"Photo"</h3>
-                    <form method="post" action="/admin/photo" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="sku" value=(&p.sku)>
-                        <input type="file" name="file" accept="image/*" required="required"
-                               class="text-sm" aria-label="Nouvelle photo">
-                        <button class=(BTN)>"Téléverser"</button>
-                    </form>
-                    <p class=("mt-3 text-xs ".to_string() + MUTED)>
-                        "JPEG ou PNG ; recadrée en JPEG, 1600 px de large au plus, servie par /img comme les autres."
-                    </p>
+                    photo_card(sku: p.sku.clone())
                 </section>
             </div>
         </div>
@@ -543,9 +537,39 @@ async fn remove_variant(cx: &Cx, Form(f): Form<VariantTarget>) -> Result<SeeOthe
     Ok(see_other(&format!("/admin/produit/{}", f.sku)))
 }
 
+#[cfg(feature = "native")]
+#[component]
+async fn photo_card(sku: String) -> Result {
+    view! {
+        <form method="post" action="/admin/photo" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-center gap-3">
+            <input type="hidden" name="sku" value=(&sku)>
+            <input type="file" name="file" accept="image/*" required="required"
+                   class="text-sm" aria-label="Nouvelle photo">
+            <button class=(BTN)>"Téléverser"</button>
+        </form>
+        <p class=("mt-3 text-xs ".to_string() + MUTED)>
+            "JPEG ou PNG ; recadrée en JPEG, 1600 px de large au plus, servie par /img comme les autres."
+        </p>
+    }
+}
+
+/// The edge proxies photos, it does not cook or store them.
+#[cfg(feature = "edge")]
+#[component]
+async fn photo_card(sku: String) -> Result {
+    let _ = sku;
+    view! {
+        <p class=("mt-3 text-sm ".to_string() + MUTED)>
+            "Le téléversement se fait depuis la boutique native — le bord \
+             proxie les photos, il ne les cuisine pas."
+        </p>
+    }
+}
+
 /// The one multipart route of the shop: a photo comes in whatever the
 /// admin has on disk, and leaves as a normalised JPEG in the base and in
 /// the same caches the embedded originals live in.
+#[cfg(feature = "native")]
 #[route(POST "/admin/photo")]
 async fn upload_photo(cx: &Cx, mut body: Multipart) -> Result<SeeOther> {
     current_admin(cx).await?.ok_or_not_found()?;

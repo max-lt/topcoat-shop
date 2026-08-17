@@ -1,0 +1,11 @@
+name = "bernard-edge"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-08-01"
+
+[build]
+command = "worker-build --release --no-default-features --features edge"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bernard"
+database_id = "2d0c8ca9-0dc8-4f49-a860-896adf731a5e"

@@ -2,8 +2,7 @@
 //! cart is theirs, and how full it is. Plain functions taking `cx` -- the
 //! shape Topcoat prefers over middleware.
 
-use sqlx::SqlitePool;
-use topcoat::context::{app_context, Cx};
+use topcoat::context::Cx;
 use topcoat::cookie::{cookie, cookies, Cookie, Cookies};
 use topcoat::router::headers;
 use topcoat::session;
@@ -13,8 +12,16 @@ use crate::db::{self, User};
 
 pub const CART_COOKIE: &str = "cart";
 
-pub fn pool(cx: &Cx) -> &SqlitePool {
-    app_context::<SqlitePool>(cx)
+#[cfg(feature = "native")]
+pub fn pool(cx: &Cx) -> &sqlx::SqlitePool {
+    topcoat::context::app_context::<sqlx::SqlitePool>(cx)
+}
+
+/// D1 travels through a thread_local, not the app context: the views
+/// still pass "the pool" around and stay host-agnostic.
+#[cfg(feature = "edge")]
+pub fn pool(_cx: &Cx) -> db::Db {
+    db::Db
 }
 
 /// The signed-in user, or `None`. An unknown or expired token hash counts as
@@ -24,13 +31,6 @@ pub async fn current_user(cx: &Cx) -> Result<Option<User>> {
         return Ok(None);
     };
     Ok(db::user_for_session(pool(cx), hash.as_ref()).await?)
-}
-
-/// The signed-in user, only if the base says they run the shop. Pages
-/// behind this answer 404 to everyone else: the door does not advertise
-/// itself.
-pub async fn current_admin(cx: &Cx) -> Result<Option<User>> {
-    Ok(current_user(cx).await?.filter(|u| u.admin != 0))
 }
 
 /// The visitor's cart id, minted into a cookie on first sight so an
@@ -48,6 +48,13 @@ pub fn current_cart(cx: &Cx) -> String {
         SameSite = Lax;
     });
     id
+}
+
+/// The signed-in user, only if the base says they run the shop. Pages
+/// behind this answer 404 to everyone else: the door does not advertise
+/// itself.
+pub async fn current_admin(cx: &Cx) -> Result<Option<User>> {
+    Ok(current_user(cx).await?.filter(|u| u.admin != 0))
 }
 
 /// The badge in the header.

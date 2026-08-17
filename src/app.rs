@@ -4,15 +4,12 @@
 //! that informs.
 
 use topcoat::context::Cx;
-use topcoat::font;
 use topcoat::router::error::{see_other, NotFoundError, SeeOther};
 use topcoat::router::{content::Form, layout, page, query_params, route, uri, StatusCode};
-use topcoat::tailwind;
 use topcoat::view::{component, view};
 use topcoat::Result;
 
 use crate::db::{self, format_price, Product};
-use crate::design::{SANS, SERIF};
 
 pub mod account;
 pub mod admin;
@@ -146,6 +143,32 @@ async fn page_title(cx: &Cx) -> Result<String> {
     })
 }
 
+#[cfg(feature = "native")]
+#[component]
+async fn head_assets() -> Result {
+    use crate::design::{SANS, SERIF};
+    view! {
+        topcoat::font::link(font: SERIF)
+        topcoat::font::link(font: SANS)
+        <link rel="stylesheet" href=(topcoat::tailwind::stylesheet!())>
+        topcoat::runtime::script()
+        topcoat::dev::script()
+    }
+}
+
+/// Assets proxied from the native shop: same files, same hashed names,
+/// served through the worker to stay same-origin.
+#[cfg(feature = "edge")]
+#[component]
+async fn head_assets() -> Result {
+    view! {
+        <link rel="stylesheet" href="/_topcoat/fonts/Instrument-Serif-b7fdaa0a5e0e2cce.css">
+        <link rel="stylesheet" href="/_topcoat/fonts/Instrument-Sans-b98466e4c197e009.css">
+        <link rel="stylesheet" href="/_topcoat/assets/tailwind-22640cef71758ef5.css">
+        <script type="module" src="/_topcoat/assets/topcoat-f897074dd8132591.js"></script>
+    }
+}
+
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Result) -> Result {
     let visitor = current_user(cx).await?;
@@ -206,11 +229,7 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                 <link rel="alternate" type="application/rss+xml" title="Le journal de Bernard" href="/journal/flux.xml">
                 <link rel="sitemap" href="/sitemap.xml">
                 <meta property="og:description" content="Le vestiaire et la papeterie de Bernard : coton biologique, papeterie soignée, séries courtes.">
-                font::link(font: SERIF)
-                font::link(font: SANS)
-                <link rel="stylesheet" href=(tailwind::stylesheet!())>
-                topcoat::runtime::script()
-                topcoat::dev::script()
+                head_assets()
             </head>
             <body class="min-h-screen">
                 <a href="#contenu" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-gin-800 focus:px-5 focus:py-2.5 focus:text-sm focus:text-oat-50">

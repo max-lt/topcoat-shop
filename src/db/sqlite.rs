@@ -1,131 +1,15 @@
-//! The data layer: pool, migrations, and every query the shop runs. Queries
-//! live here rather than in the pages so the SQL can be read in one place --
-//! and so swapping SQLite for a Turso-backed pool touches one file.
+//! The sqlite backend: every query the shop runs, over a tokio pool.
+//! Queries live here rather than in the pages so the SQL can be read in
+//! one place -- and so swapping the store means swapping one file.
 
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use chrono::{DateTime, Duration, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{AssertSqlSafe, FromRow, SqlitePool};
+use sqlx::{AssertSqlSafe, SqlitePool};
 
-/// anyhow, so `?` converts straight into topcoat's error type at the
-/// call sites without a per-module helper.
-pub type Error = anyhow::Error;
-
-// --- model
-
-#[derive(Debug, Clone, FromRow)]
-pub struct Product {
-    pub sku: String,
-    pub name: String,
-    pub summary: String,
-    pub detail: String,
-    pub price_cents: i64,
-    pub stock: i64,
-    pub category: String,
-    pub is_new: i64,
-    pub material: String,
-    pub hidden: i64,
-}
-
-impl Product {
-    pub fn sold_out(&self) -> bool {
-        self.stock == 0
-    }
-    /// Below this, the product page says so rather than staying silent.
-    pub fn low_stock(&self) -> bool {
-        self.stock > 0 && self.stock <= 5
-    }
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct Variant {
-    pub size: String,
-    pub stock: i64,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct User {
-    pub id: i64,
-    pub email: String,
-    pub name: String,
-    pub admin: i64,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct CartLine {
-    pub sku: String,
-    pub name: String,
-    pub size: String,
-    pub price_cents: i64,
-    pub quantity: i64,
-    pub stock: i64,
-}
-
-impl CartLine {
-    pub fn subtotal(&self) -> i64 {
-        self.price_cents * self.quantity
-    }
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct Order {
-    pub id: i64,
-    pub reference: String,
-    pub total_cents: i64,
-    pub shipping_cents: i64,
-    pub shipping: String,
-    pub status: String,
-    pub address: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct OrderLine {
-    pub sku: String,
-    pub name: String,
-    pub size: String,
-    pub price_cents: i64,
-    pub quantity: i64,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct TrackingStep {
-    pub step: String,
-    pub note: String,
-    pub at: String,
-}
-
-/// Free shipping above this; the threshold is quoted in the header banner.
-pub const FREE_SHIPPING_CENTS: i64 = 5_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShippingMode {
-    pub key: &'static str,
-    pub name: &'static str,
-    pub delay: &'static str,
-    pub cents: i64,
-}
-
-pub const SHIPPING_MODES: [ShippingMode; 2] = [
-    ShippingMode { key: "standard", name: "Standard", delay: "3 à 5 jours ouvrés", cents: 490 },
-    ShippingMode { key: "express", name: "Express", delay: "24 à 48 heures", cents: 1_190 },
-];
-
-pub fn shipping_mode(key: &str) -> ShippingMode {
-    SHIPPING_MODES.iter().copied().find(|m| m.key == key).unwrap_or(SHIPPING_MODES[0])
-}
-
-/// Shipping is free once the basket passes the threshold.
-pub fn shipping_cents(subtotal: i64, key: &str) -> i64 {
-    if subtotal >= FREE_SHIPPING_CENTS { 0 } else { shipping_mode(key).cents }
-}
-
-/// Prices are integers everywhere; this is the only place they become text.
-pub fn format_price(cents: i64) -> String {
-    format!("{},{:02}\u{a0}€", cents / 100, (cents % 100).abs())
-}
+use super::*;
 
 // --- setup
 
@@ -141,8 +25,6 @@ pub async fn connect(url: &str) -> Result<SqlitePool, Error> {
 
 // --- catalog
 
-const PRODUCT_FIELDS: &str =
-    "sku, name, summary, detail, price_cents, stock, category, is_new, material, hidden";
 
 /// The catalog, filtered by category and ordered by the visitor's choice.
 /// `sort`: 0 newest first, 1 price ascending, 2 price descending, 3 alphabetical.
@@ -476,14 +358,6 @@ pub async fn subscribe(pool: &SqlitePool, email: &str) -> Result<bool, Error> {
 
 // --- reviews
 
-#[derive(Debug, Clone, FromRow)]
-pub struct Review {
-    pub author: String,
-    pub rating: i64,
-    pub text: String,
-    pub created_at: String,
-}
-
 /// Newest first. The shop is small enough to show every review in full.
 pub async fn product_reviews(pool: &SqlitePool, sku: &str) -> Result<Vec<Review>, Error> {
     Ok(sqlx::query_as::<_, Review>(
@@ -535,14 +409,6 @@ pub async fn create_stock_alert(
 }
 
 // --- addresses
-
-#[derive(Debug, Clone, FromRow)]
-pub struct Address {
-    pub id: i64,
-    pub label: String,
-    pub text: String,
-    pub is_default: i64,
-}
 
 pub async fn addresses(pool: &SqlitePool, user_id: i64) -> Result<Vec<Address>, Error> {
     Ok(sqlx::query_as::<_, Address>(
@@ -739,8 +605,6 @@ pub async fn place_order(
     Ok(Some(reference))
 }
 
-const ORDER_FIELDS: &str =
-    "id, reference, total_cents, shipping_cents, shipping, status, address, created_at";
 
 pub async fn orders(pool: &SqlitePool, user_id: i64) -> Result<Vec<Order>, Error> {
     Ok(sqlx::query_as::<_, Order>(AssertSqlSafe(format!(
@@ -862,45 +726,7 @@ pub async fn cancel_order(
     Ok(true)
 }
 
-fn order_reference() -> String {
-    const ALPHABET: &[u8] = b"ACDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let mut raw = [0u8; 6];
-    rand::fill(&mut raw);
-    let suffix: String =
-        raw.iter().map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char).collect();
-    format!("BER-{suffix}")
-}
-
 // --- admin
-
-#[derive(Debug, Clone, FromRow)]
-pub struct AdminOrder {
-    pub reference: String,
-    pub status: String,
-    pub total_cents: i64,
-    pub created_at: String,
-    pub customer: String,
-    pub email: String,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct AdminCustomer {
-    pub name: String,
-    pub email: String,
-    pub admin: i64,
-    pub orders: i64,
-    pub total_cents: i64,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AdminStats {
-    pub products: i64,
-    pub orders: i64,
-    pub customers: i64,
-    pub subscribers: i64,
-    pub alerts: i64,
-    pub revenue_cents: i64,
-}
 
 pub async fn admin_stats(pool: &SqlitePool) -> Result<AdminStats, Error> {
     let one = |sql: &'static str| sqlx::query_scalar::<_, i64>(sql).fetch_one(pool);

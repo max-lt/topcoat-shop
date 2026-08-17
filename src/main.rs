@@ -1,15 +1,11 @@
-//! Bernard's shop: catalog, cart, accounts and order tracking, served by
-//! Topcoat over a SQLite database. One binary, no build step beyond cargo.
+//! The native host: tokio, SQLite, one binary, no build step beyond cargo.
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
 use topcoat::router::{Router, RouterBuilderDiscoverExt};
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
-mod app;
-mod db;
-mod design;
-mod images;
+use topcoat_shop::{db, images};
 
 #[tokio::main]
 async fn main() {
