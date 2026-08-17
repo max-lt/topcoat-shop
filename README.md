@@ -1,43 +1,33 @@
 # Bernard
 
-A complete demonstration shop built on [Topcoat](https://crates.io/crates/topcoat):
-catalog, cart, accounts, checkout with real stock accounting, order tracking,
-reviews, and a back office. One crate, two hosts:
+A demonstration shop on [Topcoat](https://crates.io/crates/topcoat): catalog,
+cart, accounts, checkout with stock accounting, order tracking, reviews and a
+back office. One crate, two hosts:
 
-- **native** (default feature): a single tokio binary over SQLite.
-- **edge**: the same pages compiled to wasm, run by a Cloudflare Worker
-  over D1. Only the data layer and the image pipeline differ; every page,
-  procedure and shard is shared code.
+- **native** (default feature): one tokio binary over SQLite.
+- **edge**: the same pages as wasm, run by a Cloudflare Worker over D1.
 
-The shop itself is French; the code is English.
+The data layer and the image store are per host; every page, procedure and
+shard is shared.
 
 ## Running the native shop
 
 ```sh
 cargo build
-topcoat asset bundle --bin topcoat-shop
-DATABASE_URL=shop.db ./target/debug/topcoat-shop   # HOST/PORT to override 127.0.0.1:3000
+topcoat asset bundle --bin topcoat-shop            # --release for a release binary
+DATABASE_URL=shop.db ./target/debug/topcoat-shop   # HOST/PORT override 127.0.0.1:3000
 ```
 
-Migrations run at startup and seed the catalog. The first admin is
-promoted by hand: `update users set admin = 1 where email = '...'`.
-
-The bundle lands beside the binary it was scanned from, and that is the
-only place the binary looks: a release build needs
-`topcoat asset bundle --bin topcoat-shop --release`.
+Migrations run at startup and seed the catalog. The first admin is promoted by
+hand: `update users set admin = 1 where email = '...'`.
 
 ## Product photography
 
-Photos are content, not code: neither host keeps them in the binary or in
-the base.
+`PHOTOS_DIR` (default `photos/`) holds one 1600 px JPEG per SKU in lowercase,
+`coq-mug.jpg`; the back office writes there too. An empty directory serves flat
+placeholder cards and nothing else changes.
 
-The native shop reads and writes `PHOTOS_DIR` (default `photos/`), one
-1600 px JPEG per SKU in lowercase (`coq-mug.jpg`). The back office writes
-into the same directory. With an empty directory the shop serves flat
-placeholder cards and everything else works.
-
-The Worker reads the `PHOTOS` R2 bucket, same naming, and writes back to
-it on upload.
+The Worker keeps the same tree in the `PHOTOS` R2 bucket.
 
 ## Running at the edge
 
@@ -46,12 +36,11 @@ for f in migrations/*.sql; do npx wrangler d1 execute DB --local --file "$f"; do
 for p in photos/*.jpg; do
     npx wrangler r2 object put "bernard-photos/$(basename "$p")" --file "$p" --local
 done
-cargo run --bin static-bundle   # writes public/: stylesheet, runtime, fonts
+cargo run --bin static-bundle   # writes public/
 npx wrangler dev
 ```
 
-`static-bundle` renders those files out of the shop's own router, in
-process. Workers Assets serves them; the Worker fetches nothing from
-anywhere.
+`static-bundle` renders the stylesheet, the client runtime and the fonts out of
+the shop's own router; Workers Assets serves them.
 
 See docs/DEPLOYMENT.md for the production checklist.
