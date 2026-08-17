@@ -1,7 +1,7 @@
 //! Crawler fare: the journal's RSS feed, the sitemap and robots.txt.
-//! Hand-rolled XML -- three tags do not justify a dependency.
 
 use topcoat::context::Cx;
+use topcoat::router::content::sitemap::{ChangeFrequency, Sitemap, SitemapUrl};
 use topcoat::router::response::{IntoResponse, Response};
 use topcoat::router::{route, Body};
 use topcoat::Result;
@@ -9,16 +9,6 @@ use topcoat::Result;
 use crate::app::context::{pool, public_origin};
 use crate::app::journal::POSTS;
 use crate::db;
-
-struct Xml(String);
-
-impl IntoResponse for Xml {
-    fn into_response(self, _cx: &Cx) -> Result<Response> {
-        Ok(Response::builder()
-            .header("Content-Type", "application/xml; charset=utf-8")
-            .body(Body::from(self.0))?)
-    }
-}
 
 struct Rss(String);
 
@@ -66,25 +56,33 @@ async fn feed(cx: &Cx) -> Result<Rss> {
     )))
 }
 
+/// Absolute locations rather than root-relative ones: the same build serves
+/// localhost, workers.dev and the shop's own domain, so the origin comes
+/// from the request instead of a base registered once on the router.
 #[route(GET "/sitemap.xml")]
-async fn sitemap(cx: &Cx) -> Result<Xml> {
+async fn sitemap(cx: &Cx) -> Result<Sitemap> {
     let origin = public_origin(cx);
-    let mut urls = String::new();
-    for path in
-        ["/", "/boutique", "/journal", "/maison", "/aide", "/contact", "/cgv", "/mentions-legales"]
-    {
-        urls.push_str(&format!("<url><loc>{origin}{path}</loc></url>"));
-    }
-    for p in db::catalog(pool(cx), "", 3).await? {
-        urls.push_str(&format!("<url><loc>{origin}/produit/{}</loc></url>", p.sku));
-    }
-    for (slug, ..) in POSTS {
-        urls.push_str(&format!("<url><loc>{origin}/journal/{slug}</loc></url>"));
-    }
-    Ok(Xml(format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
-         <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">{urls}</urlset>"
-    )))
+    let at = |path: &str| SitemapUrl::new(format!("{origin}{path}"));
+
+    Ok(Sitemap::new()
+        .url(at("/").change_frequency(ChangeFrequency::Daily).priority(1.0))
+        .url(at("/boutique").change_frequency(ChangeFrequency::Daily).priority(0.9))
+        .url(at("/journal").change_frequency(ChangeFrequency::Weekly).priority(0.6))
+        .urls(["/maison", "/aide", "/contact"].map(|path| {
+            at(path).change_frequency(ChangeFrequency::Monthly).priority(0.4)
+        }))
+        .urls(["/cgv", "/mentions-legales"].map(|path| {
+            at(path).change_frequency(ChangeFrequency::Yearly).priority(0.1)
+        }))
+        // Stock and prices move under a product page that keeps its URL.
+        .urls(db::catalog(pool(cx), "", 3).await?.iter().map(|p| {
+            at(&format!("/produit/{}", p.sku))
+                .change_frequency(ChangeFrequency::Weekly)
+                .priority(0.8)
+        }))
+        .urls(POSTS.map(|(slug, ..)| {
+            at(&format!("/journal/{slug}")).change_frequency(ChangeFrequency::Yearly).priority(0.5)
+        })))
 }
 
 #[route(GET "/robots.txt")]

@@ -52,6 +52,7 @@ topcoat = { version = "0.6.0", default-features = false, features = [
     "cookie",
     "discover",
     "asset",
+    "sitemap",
 ] }
 argon2 = "0.5.3"
 chrono = { version = "0.4.45", features = ["serde", "wasmbind"] }
