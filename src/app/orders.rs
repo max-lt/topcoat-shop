@@ -99,6 +99,9 @@ async fn order_page(cx: &Cx) -> Result {
 
     let page_reference = order.reference.clone();
     let delivered = order.status == "delivered";
+    // A shipped parcel still has a step to walk, though it can no longer
+    // be cancelled.
+    let can_advance = matches!(order.status.as_str(), "paid" | "packing" | "shipped");
     let cancellable = order.status == "paid" || order.status == "packing";
     let mode = db::shipping_mode(&order.shipping);
     let subtotal = order.total_cents - order.shipping_cents;
@@ -133,7 +136,7 @@ async fn order_page(cx: &Cx) -> Result {
                     tracking(reference: $(reference_sig.get()), version: $(version.get()))
                 </div>
 
-                if cancellable {
+                if can_advance {
                 <button class=(BTN_OUTLINE.to_string() + " mt-8")
                         :hidden=$(done.get())
                         @click=$(async |_e| {
