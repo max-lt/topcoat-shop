@@ -238,26 +238,6 @@ pub async fn item_count(_: Db, cart_id: &str) -> Result<i64, Error> {
         .await
 }
 
-pub async fn add_to_cart(
-    _: Db,
-    cart_id: &str,
-    sku: &str,
-    size: &str,
-    quantity: i64,
-) -> Result<i64, Error> {
-    create_cart(cart_id).await?;
-    let stock = variant_stock(sku, size).await?;
-    if stock > 0 {
-        execute(
-            "insert into cart_lines (cart_id, sku, size, quantity) values (?1, ?2, ?3, ?4) \
-             on conflict(cart_id, sku, size) do update set quantity = min(quantity + ?4, ?5)",
-            &[s(cart_id), s(sku), s(size), n(quantity.clamp(1, stock)), n(stock)],
-        )
-        .await?;
-    }
-    item_count(Db, cart_id).await
-}
-
 /// Sets a line's quantity and reports what was actually stored. An upsert,
 /// not an update: raising the quantity of a line that was removed puts it
 /// back, instead of quietly matching no row. Returns 0 when the line is

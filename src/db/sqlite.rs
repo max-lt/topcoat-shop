@@ -257,34 +257,6 @@ pub async fn cart_lines(pool: &SqlitePool, cart_id: &str) -> Result<Vec<CartLine
     .await?)
 }
 
-pub async fn add_to_cart(
-    pool: &SqlitePool,
-    cart_id: &str,
-    sku: &str,
-    size: &str,
-    quantity: i64,
-) -> Result<i64, Error> {
-    create_cart(pool, cart_id).await?;
-    let stock = variant_stock(pool, sku, size).await?;
-    if stock == 0 {
-        return item_count(pool, cart_id).await;
-    }
-
-    sqlx::query(
-        "insert into cart_lines (cart_id, sku, size, quantity) values (?1, ?2, ?3, ?4) \
-         on conflict(cart_id, sku, size) do update set quantity = min(quantity + ?4, ?5)",
-    )
-    .bind(cart_id)
-    .bind(sku)
-    .bind(size)
-    .bind(quantity.clamp(1, stock))
-    .bind(stock)
-    .execute(pool)
-    .await?;
-
-    item_count(pool, cart_id).await
-}
-
 /// Sets a line's quantity and reports what was actually stored. An upsert,
 /// not an update: raising the quantity of a line that was removed puts it
 /// back, instead of quietly matching no row. Returns 0 when the line is

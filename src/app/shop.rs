@@ -214,14 +214,21 @@ async fn search(cx: &Cx) -> Result {
 
 // --- product page
 
-/// Adds one line and hands back the cart's new size; the button reads it to
-/// confirm without a page reload.
+/// Sets what the cart holds of one line and hands back what was kept: the
+/// server clamps to the stock and retires the line at zero.
 #[procedure]
-async fn add(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
+async fn set_line(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
     let cart = current_cart(cx);
-    let total =
-        db::add_to_cart(pool(cx), &cart, &sku, &size, quantity.max(1.0) as i64).await?;
-    Ok(total as f64)
+    Ok(db::set_quantity(pool(cx), &cart, &sku, &size, quantity as i64).await? as f64)
+}
+
+/// What the cart holds of one line. Picking another size asks for its
+/// count rather than trusting what the page was rendered with.
+#[procedure]
+async fn in_cart(cx: &Cx, sku: String, size: String) -> Result<f64> {
+    let cart = current_cart(cx);
+    let lines = db::cart_lines(pool(cx), &cart).await?;
+    Ok(lines.iter().find(|l| l.sku == sku && l.size == size).map_or(0, |l| l.quantity) as f64)
 }
 
 path_param!(sku);
@@ -276,12 +283,19 @@ async fn product(cx: &Cx) -> Result {
     let first_size = first.map(|v| v.size.clone()).unwrap_or_default();
     let first_stock = first.map_or(p.stock, |v| v.stock) as f64;
 
+    // The stepper counts what the cart already holds: the number on the
+    // page is the line it changes.
+    let held = db::cart_lines(pool(cx), &current_cart(cx)).await?;
+    let held_of = |size: &str| {
+        held.iter().find(|l| l.sku == sku && l.size == size).map_or(0, |l| l.quantity) as f64
+    };
+    let first_held = held_of(&first_size);
+
     view! {
         signal sku_sig = page_sku;
         signal size = first_size;
         signal size_stock = first_stock;
-        signal quantity = 1.0;
-        signal added = 0.0;
+        signal held_qty = first_held;
 
         <div class="flex items-center justify-between gap-4">
             <nav class=("text-sm ".to_string() + MUTED)>
@@ -374,12 +388,10 @@ async fn product(cx: &Cx) -> Result {
                                             } else {
                                                 "min-w-14 rounded-xl px-4 py-2.5 text-sm ring-1 ring-oat-300 transition hover:ring-oat-900"
                                             })
-                                            @click=$(|_e| {
+                                            @click=$(async |_e| {
                                                 size.set(label.get());
                                                 size_stock.set(option_stock.get());
-                                                if quantity.get() > option_stock.get() {
-                                                    quantity.set(option_stock.get());
-                                                }
+                                                held_qty.set(in_cart(sku_sig.get(), label.get()).await);
                                             })>(&v.size)</button>
                                     } else {
                                         <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
@@ -414,40 +426,49 @@ async fn product(cx: &Cx) -> Result {
                     }
 
                     <div class="mt-8 flex flex-wrap items-center gap-4">
-                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300">
-                            <button aria-label="Diminuer la quantité" class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
-                                    @click=$(|_e| quantity.set(if quantity.get() > 1.0 { quantity.get() - 1.0 } else { 1.0 }))>"−"</button>
-                            <span class="w-9 text-center tabular-nums">$(quantity.get())</span>
-                            <button aria-label="Augmenter la quantité"
-                                    :class=$(if quantity.get() >= size_stock.get() {
+                        // Empty cart line: the stepper has nothing to show yet
+                        // and the button is the way in.
+                        <button class=(BTN.to_string() + " h-11 px-8")
+                                :hidden=$(held_qty.get() > 0.0)
+                                @click=$(async |_e| {
+                                    held_qty.set(set_line(sku_sig.get(), size.get(), 1.0).await);
+                                })>"Ajouter au panier"</button>
+
+                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300"
+                             :hidden=$(held_qty.get() == 0.0)>
+                            <button aria-label="Retirer un exemplaire du panier"
+                                    class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
+                                    @click=$(async |_e| {
+                                        held_qty.set(set_line(sku_sig.get(), size.get(), held_qty.get() - 1.0).await);
+                                    })>"−"</button>
+                            <span class="w-9 text-center tabular-nums">$(held_qty.get())</span>
+                            <button aria-label="Ajouter un exemplaire au panier"
+                                    :class=$(if held_qty.get() >= size_stock.get() {
                                         "flex h-11 w-11 select-none items-center justify-center rounded-r-full text-lg text-oat-300"
                                     } else {
                                         "flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
                                     })
-                                    @click=$(|_e| if quantity.get() < size_stock.get() {
-                                        quantity.increment()
+                                    // No ceiling guard: an `if` around an await
+                                    // compiles to a plain arrow the runtime
+                                    // cannot run, and the server clamps anyway.
+                                    @click=$(async |_e| {
+                                        held_qty.set(set_line(sku_sig.get(), size.get(), held_qty.get() + 1.0).await);
                                     })>"+"</button>
                         </div>
-                        <button class=(BTN.to_string() + " h-11 px-8")
-                                @click=$(async |_e| {
-                                    let n = add(sku_sig.get(), size.get(), quantity.get()).await;
-                                    added.set(n);
-                                })>"Ajouter au panier"</button>
+
+                        <a href="/panier" class=(BTN_OUTLINE.to_string() + " h-11")
+                           :hidden=$(held_qty.get() == 0.0)>"Voir le panier"</a>
                     </div>
+
+                    <p class="mt-4 text-sm text-brique-700" :hidden=$(held_qty.get() < size_stock.get())>
+                        "Vous avez tout le stock disponible dans votre panier."
+                    </p>
 
                     if low {
                         <p class="mt-4 text-sm text-brique-700">
                             (format!("Plus que {} exemplaires", p.stock))
                         </p>
                     }
-
-                    // display:none suspends CSS animations, so the pill plays
-                    // its entrance the moment the first add reveals it.
-                    <p class="animate-apparition mt-5 inline-flex items-center gap-2 rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50"
-                       :hidden=$(added.get() == 0.0)>
-                        "✓ Ajouté — " $(added.get()) " article(s) au panier."
-                        <a href="/panier" class="font-medium underline underline-offset-4">"Voir le panier"</a>
-                    </p>
                 }
 
                 <ul class=("mt-10 space-y-2 text-sm ".to_string() + MUTED)>
