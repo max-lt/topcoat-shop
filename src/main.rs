@@ -18,6 +18,8 @@ async fn main() {
         .await
         .expect("database");
 
+    images::prewarm();
+
     let router = Router::builder()
         .discover()
         .assets(assets)
