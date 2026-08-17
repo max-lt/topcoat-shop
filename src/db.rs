@@ -1,7 +1,10 @@
 //! The data layer: pool, migrations, and every query the shop runs. Queries
 //! live here rather than in the pages so the SQL can be read in one place.
 
-use chrono::Utc;
+use argon2::password_hash::rand_core::OsRng;
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::Argon2;
+use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{AssertSqlSafe, FromRow, SqlitePool};
 
@@ -38,6 +41,13 @@ impl Product {
 pub struct Variant {
     pub size: String,
     pub stock: i64,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct User {
+    pub id: i64,
+    pub email: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -196,12 +206,125 @@ async fn variant_stock(pool: &SqlitePool, sku: &str, size: &str) -> Result<i64, 
         .unwrap_or(0))
 }
 
+// --- accounts
+
+pub async fn register(
+    pool: &SqlitePool,
+    email: &str,
+    name: &str,
+    password: &str,
+) -> Result<User, Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| anyhow::anyhow!("hashing: {e}"))?
+        .to_string();
+
+    let id: i64 = sqlx::query_scalar(
+        "insert into users (email, name, password_hash, created_at) \
+         values (?1, ?2, ?3, ?4) returning id",
+    )
+    .bind(email.trim().to_lowercase())
+    .bind(name.trim())
+    .bind(hash)
+    .bind(Utc::now().to_rfc3339())
+    .fetch_one(pool)
+    .await?;
+
+    Ok(User { id, email: email.trim().to_lowercase(), name: name.trim().to_string() })
+}
+
+pub async fn verify_credentials(
+    pool: &SqlitePool,
+    email: &str,
+    password: &str,
+) -> Result<Option<User>, Error> {
+    let row: Option<(i64, String, String, String)> = sqlx::query_as(
+        "select id, email, name, password_hash from users where email = ?1",
+    )
+    .bind(email.trim().to_lowercase())
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((id, email, name, hash)) = row else {
+        return Ok(None);
+    };
+    let expected = PasswordHash::new(&hash).map_err(|e| anyhow::anyhow!("hash: {e}"))?;
+    if Argon2::default().verify_password(password.as_bytes(), &expected).is_err() {
+        return Ok(None);
+    }
+    Ok(Some(User { id, email, name }))
+}
+
+pub async fn email_taken(pool: &SqlitePool, email: &str) -> Result<bool, Error> {
+    let n: i64 = sqlx::query_scalar("select count(*) from users where email = ?1")
+        .bind(email.trim().to_lowercase())
+        .fetch_one(pool)
+        .await?;
+    Ok(n > 0)
+}
+
+// --- sessions
+
+pub async fn open_session(
+    pool: &SqlitePool,
+    token_hash: &[u8],
+    user_id: i64,
+    expires_at: DateTime<Utc>,
+) -> Result<(), Error> {
+    sqlx::query(
+        "insert or replace into sessions (token_hash, user_id, expires_at) \
+         values (?1, ?2, ?3)",
+    )
+    .bind(token_hash)
+    .bind(user_id)
+    .bind(expires_at.to_rfc3339())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Resolves a session token hash to its user, treating an expired record as
+/// no session at all.
+pub async fn user_for_session(
+    pool: &SqlitePool,
+    token_hash: &[u8],
+) -> Result<Option<User>, Error> {
+    Ok(sqlx::query_as::<_, User>(
+        "select u.id, u.email, u.name from sessions s \
+         join users u on u.id = s.user_id \
+         where s.token_hash = ?1 and s.expires_at > ?2",
+    )
+    .bind(token_hash)
+    .bind(Utc::now().to_rfc3339())
+    .fetch_optional(pool)
+    .await?)
+}
+
+pub async fn close_session(pool: &SqlitePool, token_hash: &[u8]) -> Result<(), Error> {
+    sqlx::query("delete from sessions where token_hash = ?1")
+        .bind(token_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 // --- cart
 
 pub async fn create_cart(pool: &SqlitePool, id: &str) -> Result<(), Error> {
     sqlx::query("insert or ignore into carts (id, created_at) values (?1, ?2)")
         .bind(id)
         .bind(Utc::now().to_rfc3339())
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Signing in claims whatever the visitor had in their anonymous cart.
+pub async fn attach_cart(pool: &SqlitePool, cart_id: &str, user_id: i64) -> Result<(), Error> {
+    sqlx::query("update carts set user_id = ?2 where id = ?1")
+        .bind(cart_id)
+        .bind(user_id)
         .execute(pool)
         .await?;
     Ok(())

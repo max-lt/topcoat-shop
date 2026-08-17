@@ -3,6 +3,7 @@
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
+use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 use topcoat::router::{Router, RouterBuilderDiscoverExt};
 
 mod app;
@@ -21,6 +22,7 @@ async fn main() {
         .discover()
         .assets(assets)
         .cookies()
+        .sessions(SessionConfig::default())
         .app_context(pool)
         .build();
     topcoat::start(router).await.unwrap();

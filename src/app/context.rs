@@ -1,18 +1,28 @@
-//! What every page needs to know about the visitor: which cart is theirs
-//! and how full it is. Plain functions taking `cx` -- the shape Topcoat
-//! prefers over middleware.
+//! What every page needs to know about the visitor: who they are, which
+//! cart is theirs, and how full it is. Plain functions taking `cx` -- the
+//! shape Topcoat prefers over middleware.
 
 use sqlx::SqlitePool;
 use topcoat::context::{app_context, Cx};
 use topcoat::cookie::{cookie, cookies, Cookies};
+use topcoat::session;
 use topcoat::Result;
 
-use crate::db;
+use crate::db::{self, User};
 
 pub const CART_COOKIE: &str = "cart";
 
 pub fn pool(cx: &Cx) -> &SqlitePool {
     app_context::<SqlitePool>(cx)
+}
+
+/// The signed-in user, or `None`. An unknown or expired token hash counts as
+/// signed out, never as an error.
+pub async fn current_user(cx: &Cx) -> Result<Option<User>> {
+    let Some(hash) = session::token_hash(cx).await? else {
+        return Ok(None);
+    };
+    Ok(db::user_for_session(pool(cx), hash.as_ref()).await?)
 }
 
 /// The visitor's cart id, minted into a cookie on first sight so an
