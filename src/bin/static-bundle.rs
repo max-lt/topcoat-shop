@@ -76,16 +76,19 @@ async fn main() {
     println!("{} files under {}/", written.len(), bundle::DIRECTORY);
 }
 
-/// Every `/_topcoat` url an html or css document points at. The shop
-/// quotes all of them, which is all the parsing this needs.
+/// Every file url an html or css document points at. The shop quotes all
+/// of them, which is all the parsing this needs. Only these two prefixes:
+/// the runtime's own endpoints live under `/_topcoat` too and answer POST.
 fn referenced(document: &str) -> Vec<String> {
     let mut found = Vec::new();
-    for (index, _) in document.match_indices("/_topcoat/") {
-        let rest = &document[index..];
-        let end = rest.find(['"', '\'', ')', ' ']).unwrap_or(rest.len());
-        let url = &rest[..end];
-        if !found.iter().any(|seen| seen == url) {
-            found.push(url.to_string());
+    for prefix in ["/_topcoat/assets/", "/_topcoat/fonts/"] {
+        for (index, _) in document.match_indices(prefix) {
+            let rest = &document[index..];
+            let end = rest.find(['"', '\'', ')', ' ']).unwrap_or(rest.len());
+            let url = &rest[..end];
+            if !found.iter().any(|seen| seen == url) {
+                found.push(url.to_string());
+            }
         }
     }
     found
