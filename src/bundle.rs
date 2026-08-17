@@ -7,11 +7,10 @@
 /// deployment.
 pub const DIRECTORY: &str = "public";
 
+/// The `@font-face` sheets and Tailwind's output in one file: a browser
+/// waits on every stylesheet in the head before it paints. The faces name
+/// woff2 files under `/_topcoat/assets/`, which land there too.
 pub const STYLESHEET: &str = "/_static/site.css";
 
+/// Topcoat's client runtime.
 pub const SCRIPT: &str = "/_static/app.js";
-
-/// The `@font-face` sheets. Their own `src:` urls point into
-/// `/_topcoat/assets/`, where the woff2 files land under hashed names.
-pub const SERIF_CSS: &str = "/_static/serif.css";
-pub const SANS_CSS: &str = "/_static/sans.css";

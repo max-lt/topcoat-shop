@@ -165,10 +165,8 @@ async fn head_assets() -> Result {
 #[cfg(feature = "edge")]
 #[component]
 async fn head_assets() -> Result {
-    use crate::bundle::{SANS_CSS, SCRIPT, SERIF_CSS, STYLESHEET};
+    use crate::bundle::{SCRIPT, STYLESHEET};
     view! {
-        <link rel="stylesheet" href=(SERIF_CSS)>
-        <link rel="stylesheet" href=(SANS_CSS)>
         <link rel="stylesheet" href=(STYLESHEET)>
         <script type="module" src=(SCRIPT)></script>
     }

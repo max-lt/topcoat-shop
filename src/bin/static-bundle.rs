@@ -18,7 +18,6 @@ use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
 use topcoat_shop::bundle;
 use topcoat_shop::db;
-use topcoat_shop::design::{SANS, SERIF};
 
 const LIMIT: usize = 32 * 1024 * 1024;
 
@@ -47,27 +46,45 @@ async fn main() {
 
     let home = String::from_utf8(fetch(&router, "/").await).expect("the home page is utf-8");
 
-    // A stylesheet pulls in the woff2 files, so what it points at is
-    // queued in turn.
+    // One stylesheet rather than three: each link is a request the browser
+    // waits on before it paints, and the two font sheets are a kilobyte
+    // between them. The faces come first, so a rule can override them.
+    let mut sheet = String::new();
+    let mut script = Vec::new();
     let mut written: BTreeMap<String, usize> = BTreeMap::new();
+
     let mut queue: Vec<String> = referenced(&home);
+    let mut seen: Vec<String> = Vec::new();
     while let Some(url) = queue.pop() {
-        let target = destination(&url);
-        if written.contains_key(&target) {
+        if seen.contains(&url) {
             continue;
         }
+        seen.push(url.clone());
         let bytes = fetch(&router, &url).await;
+
         if url.ends_with(".css") {
             let text = String::from_utf8_lossy(&bytes).into_owned();
+            // A stylesheet pulls in the woff2 files it names.
             queue.extend(referenced(&text));
+            if url.starts_with("/_topcoat/fonts/") {
+                sheet.insert_str(0, &text);
+            } else {
+                sheet.push_str(&text);
+            }
+        } else if url.ends_with(".js") {
+            script = bytes;
+        } else {
+            write(&url, &bytes);
+            written.insert(url, bytes.len());
         }
-        write(&target, &bytes);
-        written.insert(target, bytes.len());
     }
 
-    for expected in [bundle::STYLESHEET, bundle::SCRIPT, bundle::SERIF_CSS, bundle::SANS_CSS] {
-        assert!(written.contains_key(expected), "the head never asked for {expected}");
-    }
+    assert!(!sheet.is_empty(), "the head asked for no stylesheet");
+    assert!(!script.is_empty(), "the head asked for no script");
+    write(bundle::STYLESHEET, sheet.as_bytes());
+    write(bundle::SCRIPT, &script);
+    written.insert(bundle::STYLESHEET.to_string(), sheet.len());
+    written.insert(bundle::SCRIPT.to_string(), script.len());
 
     let _ = std::fs::remove_file(&scratch);
     for (path, size) in &written {
@@ -92,33 +109,6 @@ fn referenced(document: &str) -> Vec<String> {
         }
     }
     found
-}
-
-/// Where a served url lands in the tree. What the head names gets a fixed
-/// name; what a stylesheet pulls in keeps the hashed path it spells.
-fn destination(url: &str) -> String {
-    let family_slug = |font: topcoat::font::Font| {
-        font.family()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-    };
-
-    if url.starts_with("/_topcoat/fonts/") {
-        if url.contains(&family_slug(SERIF)) {
-            return bundle::SERIF_CSS.to_string();
-        }
-        if url.contains(&family_slug(SANS)) {
-            return bundle::SANS_CSS.to_string();
-        }
-    }
-    if url.ends_with(".css") {
-        return bundle::STYLESHEET.to_string();
-    }
-    if url.ends_with(".js") {
-        return bundle::SCRIPT.to_string();
-    }
-    url.to_string()
 }
 
 async fn fetch(router: &Router, url: &str) -> Vec<u8> {
