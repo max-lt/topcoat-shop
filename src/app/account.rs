@@ -142,8 +142,10 @@ async fn sign_out(cx: &Cx) -> Result<SeeOther> {
 async fn account(cx: &Cx) -> Result {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let orders = db::orders(pool(cx), user.id).await?;
+    let addresses = db::addresses(pool(cx), user.id).await?;
     let no_orders = orders.is_empty();
     let how_many = orders.len();
+    let no_address = addresses.is_empty();
 
     view! {
         <div class="flex flex-wrap items-end justify-between gap-6">
@@ -156,6 +158,57 @@ async fn account(cx: &Cx) -> Result {
                 <button class=(BTN_OUTLINE)>"Se déconnecter"</button>
             </form>
         </div>
+
+        <section class="mt-16" id="adresses">
+            <h2 class="text-3xl">"Vos adresses"</h2>
+
+            if no_address {
+                <p class=("mt-4 text-sm ".to_string() + MUTED)>
+                    "Aucune adresse enregistrée — la première se propose au moment de commander."
+                </p>
+            } else {
+                <ul class="mt-6 grid gap-4 sm:grid-cols-2">
+                    for a in &addresses {
+                        <li class=(CARD.to_string() + " p-5")>
+                            <div class="flex items-baseline justify-between gap-3">
+                                <span class="font-medium">(&a.label)</span>
+                                if a.is_default != 0 {
+                                    <span class="rounded-full bg-gin-100 px-2.5 py-0.5 text-xs font-medium text-gin-800">"Par défaut"</span>
+                                }
+                            </div>
+                            <p class=("mt-2 whitespace-pre-line text-sm ".to_string() + SOFT)>(&a.text)</p>
+                            <div class="mt-4 flex gap-4 text-sm">
+                                if a.is_default == 0 {
+                                    <form method="post" action="/adresses/defaut">
+                                        <input type="hidden" name="id" value=(a.id)>
+                                        <button class="underline underline-offset-4 transition hover:text-gin-700">"Par défaut"</button>
+                                    </form>
+                                }
+                                <form method="post" action="/adresses/supprimer">
+                                    <input type="hidden" name="id" value=(a.id)>
+                                    <button class=("underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)>"Supprimer"</button>
+                                </form>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <details class="mt-6">
+                <summary class=("text-sm underline underline-offset-4 ".to_string() + MUTED)>"Ajouter une adresse"</summary>
+                <form method="post" action="/adresses" class=(CARD.to_string() + " mt-4 max-w-xl space-y-4 p-6")>
+                    <div>
+                        <label class="text-sm font-medium">"Libellé"</label>
+                        <input class=(FIELD.to_string() + " mt-2") name="label" required="required" placeholder="Chez moi, Bureau…">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium">"Adresse"</label>
+                        <textarea class=(FIELD.to_string() + " mt-2") name="text" required="required" rows="3" placeholder="12 rue de la Marée&#10;29200 Brest"></textarea>
+                    </div>
+                    <button class=(BTN_OUTLINE)>"Enregistrer"</button>
+                </form>
+            </details>
+        </section>
 
         <section class="mt-16">
             <div class="flex items-baseline justify-between">
@@ -189,4 +242,38 @@ async fn account(cx: &Cx) -> Result {
             }
         </section>
     }
+}
+
+// --- address book
+
+#[derive(serde::Deserialize)]
+struct NewAddress {
+    label: String,
+    text: String,
+}
+
+#[route(POST "/adresses")]
+async fn add_address(cx: &Cx, Form(f): Form<NewAddress>) -> Result<SeeOther> {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    db::add_address(pool(cx), user.id, &f.label, &f.text).await?;
+    Ok(see_other("/compte#adresses"))
+}
+
+#[derive(serde::Deserialize)]
+struct AddressTarget {
+    id: i64,
+}
+
+#[route(POST "/adresses/supprimer")]
+async fn remove_address(cx: &Cx, Form(f): Form<AddressTarget>) -> Result<SeeOther> {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    db::remove_address(pool(cx), user.id, f.id).await?;
+    Ok(see_other("/compte#adresses"))
+}
+
+#[route(POST "/adresses/defaut")]
+async fn default_address(cx: &Cx, Form(f): Form<AddressTarget>) -> Result<SeeOther> {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    db::set_default_address(pool(cx), user.id, f.id).await?;
+    Ok(see_other("/compte#adresses"))
 }

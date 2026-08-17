@@ -4,7 +4,6 @@
 //! and never the browser's arithmetic.
 
 use topcoat::context::Cx;
-
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{content::Form, page, query_params, route};
 use topcoat::runtime::{procedure, shard};
@@ -239,6 +238,9 @@ async fn checkout(cx: &Cx) -> Result {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let id = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &id).await?;
+    let addresses = db::addresses(pool(cx), user.id).await?;
+    let has_book = !addresses.is_empty();
+
     if lines.is_empty() {
         return view! {
             page_heading(eyebrow: "Commande", title: "Rien à commander", lede: "Votre panier est vide.")
@@ -264,8 +266,37 @@ async fn checkout(cx: &Cx) -> Result {
                     <h2 class="text-2xl">"Adresse de livraison"</h2>
                     <p class=("mt-1 text-sm ".to_string() + MUTED)>"Commande au nom de " (&user.name) "."</p>
 
+                    if has_book {
+                        <div class="mt-4 space-y-3">
+                            for a in &addresses {
+                                <label class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600">
+                                    if a.is_default != 0 {
+                                        <input type="radio" name="address_id" value=(a.id) checked="checked" class="mt-1 h-4 w-4 accent-gin-700">
+                                    } else {
+                                        <input type="radio" name="address_id" value=(a.id) class="mt-1 h-4 w-4 accent-gin-700">
+                                    }
+                                    <span class="flex-1">
+                                        <span class="block font-medium">(&a.label)</span>
+                                        <span class=("block whitespace-pre-line text-sm ".to_string() + MUTED)>(&a.text)</span>
+                                    </span>
+                                </label>
+                            }
+                            <label class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600">
+                                <input type="radio" name="address_id" value="" class="mt-1 h-4 w-4 accent-gin-700">
+                                <span class="flex-1">
+                                    <span class="block font-medium">"Une autre adresse"</span>
+                                    <span class=("block text-sm ".to_string() + MUTED)>"Saisie ci-dessous."</span>
+                                </span>
+                            </label>
+                        </div>
+                    }
+
                     <textarea name="address" required="required" rows="4" class=(FIELD.to_string() + " mt-4")
                               placeholder="12 rue de la Marée&#10;29200 Brest">"12 rue de la Marée\n29200 Brest"</textarea>
+                    <label class=("mt-3 flex items-center gap-2 text-sm ".to_string() + MUTED)>
+                        <input type="checkbox" name="save" value="1" class="h-4 w-4 accent-gin-700">
+                        "Enregistrer cette adresse dans mon carnet"
+                    </label>
                 </section>
 
                 <section>
@@ -334,6 +365,10 @@ struct CheckoutForm {
     address: String,
     #[serde(default)]
     shipping: String,
+    #[serde(default)]
+    address_id: String,
+    #[serde(default)]
+    save: String,
 }
 
 /// A plain form POST: it works without JavaScript, and the redirect
@@ -343,7 +378,17 @@ async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<SeeOth
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let id = current_cart(cx);
 
-    let address = choice.address.trim().to_string();
+    // A saved address wins over the free-text one; a new address only
+    // enters the book when the visitor asked for it.
+    let address = if let Ok(aid) = choice.address_id.parse::<i64>() {
+        db::address(pool(cx), user.id, aid).await?.ok_or_not_found()?.text
+    } else {
+        let text = choice.address.trim().to_string();
+        if choice.save == "1" && !text.is_empty() {
+            db::add_address(pool(cx), user.id, "Mon adresse", &text).await?;
+        }
+        text
+    };
 
     let Some(reference) =
         db::place_order(pool(cx), user.id, &id, &address, &choice.shipping).await?

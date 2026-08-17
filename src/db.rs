@@ -531,6 +531,80 @@ pub async fn create_stock_alert(
     Ok(())
 }
 
+// --- addresses
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Address {
+    pub id: i64,
+    pub label: String,
+    pub text: String,
+    pub is_default: i64,
+}
+
+pub async fn addresses(pool: &SqlitePool, user_id: i64) -> Result<Vec<Address>, Error> {
+    Ok(sqlx::query_as::<_, Address>(
+        "select id, label, text, is_default from addresses \
+         where user_id = ?1 order by is_default desc, id",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn address(pool: &SqlitePool, user_id: i64, id: i64) -> Result<Option<Address>, Error> {
+    Ok(sqlx::query_as::<_, Address>(
+        "select id, label, text, is_default from addresses where user_id = ?1 and id = ?2",
+    )
+    .bind(user_id)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?)
+}
+
+/// The first address a visitor saves becomes their default one.
+pub async fn add_address(
+    pool: &SqlitePool,
+    user_id: i64,
+    label: &str,
+    text: &str,
+) -> Result<(), Error> {
+    sqlx::query(
+        "insert into addresses (user_id, label, text, is_default) values (?1, ?2, ?3, \
+         (select count(*) = 0 from addresses where user_id = ?1))",
+    )
+    .bind(user_id)
+    .bind(label.trim())
+    // Textareas submit CRLF; the base keeps plain newlines.
+    .bind(text.replace('\r', "").trim())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn remove_address(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), Error> {
+    sqlx::query("delete from addresses where user_id = ?1 and id = ?2")
+        .bind(user_id)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn set_default_address(pool: &SqlitePool, user_id: i64, id: i64) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("update addresses set is_default = 0 where user_id = ?1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("update addresses set is_default = 1 where user_id = ?1 and id = ?2")
+        .bind(user_id)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 // --- orders
 
 /// Clamps a cart to the stock actually on the shelves: lines whose item is
