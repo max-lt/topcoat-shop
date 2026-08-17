@@ -3,8 +3,8 @@
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 use topcoat::router::{Router, RouterBuilderDiscoverExt};
+use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
 mod app;
 mod db;
@@ -18,7 +18,7 @@ async fn main() {
         .await
         .expect("database");
 
-    images::prewarm();
+    images::prewarm(pool.clone());
 
     let router = Router::builder()
         .discover()

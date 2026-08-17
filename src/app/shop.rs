@@ -236,7 +236,9 @@ async fn product(cx: &Cx) -> Result {
     let variants = db::variants(pool(cx), &sku).await?;
     let related = db::related_products(pool(cx), &sku, &p.category).await?;
     let reviews = db::product_reviews(pool(cx), &sku).await?;
-    let signed_in = current_user(cx).await?.is_some();
+    let visitor = current_user(cx).await?;
+    let signed_in = visitor.is_some();
+    let is_admin = visitor.is_some_and(|u| u.admin != 0);
 
     // The shelf shows what the visitor saw before this page, not this page.
     let seen_before = note_seen(cx, &sku);
@@ -278,11 +280,17 @@ async fn product(cx: &Cx) -> Result {
         signal quantity = 1.0;
         signal added = 0.0;
 
-        <nav class=("text-sm ".to_string() + MUTED)>
-            <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
-            " / "
-            <a href=("/boutique?categorie=".to_string() + &p.category) class="transition hover:text-gin-700">(&p.category)</a>
-        </nav>
+        <div class="flex items-center justify-between gap-4">
+            <nav class=("text-sm ".to_string() + MUTED)>
+                <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
+                " / "
+                <a href=("/boutique?categorie=".to_string() + &p.category) class="transition hover:text-gin-700">(&p.category)</a>
+            </nav>
+            // The bridge the shopkeeper crosses; nobody else sees it.
+            if is_admin {
+                <a href=("/admin/produit/".to_string() + &p.sku) class=(BTN_OUTLINE)>"Éditer"</a>
+            }
+        </div>
 
         <div class="mt-6 grid gap-12 lg:grid-cols-2">
             // data-vt plus a static CSS attr() rule carries the morph name: a

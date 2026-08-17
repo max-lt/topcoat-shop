@@ -1,6 +1,6 @@
 //! Product photography, resized on the fly, in process. Originals are
-//! compiled in from assets/photos; `/img/{sku}?w=` serves them at three
-//! fixed widths. A width is resized once -- Lanczos,
+//! compiled in from assets/photos or uploaded to the base; `/img/{sku}?w=`
+//! serves them at three fixed widths. A width is resized once -- Lanczos,
 //! then JPEG at quality 80 -- and memoised for the rest of the process
 //! lifetime, so the cost of a size is one CPU burst ever, not one per
 //! request. The width whitelist is what makes this safe to expose: a public
@@ -24,6 +24,12 @@ include!(concat!(env!("OUT_DIR"), "/photos.rs"));
 static RESIZED: LazyLock<Mutex<HashMap<(String, u32), Arc<Vec<u8>>>>> =
     LazyLock::new(Default::default);
 
+/// Photos born after the binary: uploaded through the admin, stored in
+/// the base, held here with their fingerprint once loaded. `/img` serves
+/// them through the same resize pipeline as the embedded originals.
+static UPLOADED: LazyLock<Mutex<HashMap<String, (u32, Arc<Vec<u8>>)>>> =
+    LazyLock::new(Default::default);
+
 /// A fingerprint of each original, folded into the URLs the templates
 /// emit: `immutable` is only honest if the URL changes with the bytes.
 /// Without it, swapping a photo leaves every past visitor on the old one
@@ -39,7 +45,15 @@ fn fingerprint(bytes: &[u8]) -> u32 {
 /// The one way templates should reference a photo.
 pub fn url(sku: &str, width: u32) -> String {
     let key = sku.to_ascii_lowercase();
-    let v = FINGERPRINTS.get(key.as_str()).copied().unwrap_or(0);
+    // An uploaded photo outranks the compiled-in one, fingerprint included:
+    // replacing a photo from the admin must change the URL it is served at.
+    let v = UPLOADED
+        .lock()
+        .unwrap()
+        .get(&key)
+        .map(|(f, _)| *f)
+        .or_else(|| FINGERPRINTS.get(key.as_str()).copied())
+        .unwrap_or(0);
     format!("/img/{sku}?w={width}&v={v:08x}")
 }
 
@@ -64,11 +78,33 @@ pub fn background(key: &str) -> String {
 /// One task, sequential: warmup is background work, and decoding every
 /// original at once holds tens of megabytes per image in flight -- enough
 /// to get the process OOM-killed in a small VM.
-pub fn prewarm() {
-    tokio::spawn(async {
-        let _ = tokio::task::spawn_blocking(|| {
+pub fn prewarm(pool: sqlx::SqlitePool) {
+    tokio::spawn(async move {
+        // The uploaded photos register before any baking: fingerprints are
+        // cheap, and url() and the route must prefer them from the very
+        // first request -- not once a minute of warmup has passed.
+        let uploaded = crate::db::all_photos(&pool).await.unwrap_or_default();
+        let overridden: std::collections::HashSet<String> =
+            uploaded.iter().map(|(sku, _)| sku.to_ascii_lowercase()).collect();
+        {
+            let mut store = UPLOADED.lock().unwrap();
+            for (sku, bytes) in &uploaded {
+                store.insert(
+                    sku.to_ascii_lowercase(),
+                    (fingerprint(bytes), Arc::new(bytes.clone())),
+                );
+            }
+        }
+        // Then the slow pass -- skipping the compiled-in photos an upload
+        // has replaced: their stale sizes must never enter the caches.
+        let _ = tokio::task::spawn_blocking(move || {
             for (key, bytes) in EMBEDDED {
-                bake(key, bytes);
+                if !overridden.contains(*key) {
+                    bake(key, bytes);
+                }
+            }
+            for (sku, bytes) in uploaded {
+                bake(&sku.to_ascii_lowercase(), &bytes);
             }
         })
         .await;
@@ -93,6 +129,30 @@ fn bake(key: &str, bytes: &[u8]) {
             RESIZED.lock().unwrap().insert((key.to_string(), width), Arc::new(out));
         }
     }
+}
+
+/// Takes a freshly normalised photo into the uploaded store and its caches.
+/// Blocking work -- call it from the blocking pool.
+pub fn adopt(sku: String, bytes: Vec<u8>) {
+    let sku = sku.to_ascii_lowercase();
+    let v = fingerprint(&bytes);
+    bake(&sku, &bytes);
+    UPLOADED.lock().unwrap().insert(sku, (v, Arc::new(bytes)));
+}
+
+/// Any upload becomes a JPEG no wider than the largest served width --
+/// whatever the admin drops in, the pipeline downstream sees one format.
+pub fn normalize(raw: &[u8]) -> image::ImageResult<Vec<u8>> {
+    let full = image::load_from_memory(raw)?;
+    let bounded = if full.width() > WIDTHS[2] {
+        full.resize(WIDTHS[2], u32::MAX, image::imageops::FilterType::Lanczos3)
+    } else {
+        full
+    };
+    let mut out = Vec::new();
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85);
+    bounded.to_rgb8().write_with_encoder(encoder)?;
+    Ok(out)
 }
 
 enum Photo {
@@ -122,6 +182,12 @@ impl IntoResponse for Photo {
     }
 }
 
+/// Where a photo's full-size bytes come from, once the lookup is done.
+enum Source {
+    Uploaded(Arc<Vec<u8>>),
+    Embedded(&'static [u8]),
+}
+
 #[path_param]
 struct Sku(str);
 
@@ -137,13 +203,22 @@ async fn photo(cx: &Cx) -> Result<Photo> {
     let requested = query_params::<Width>(cx)?.w.unwrap_or(900);
     let width = WIDTHS.into_iter().min_by_key(|w| w.abs_diff(requested)).unwrap();
 
-    // A product nobody has photographed yet: a flat oat card.
-    let Some(original) = EMBEDDED.iter().find(|(s, _)| *s == sku).map(|(_, b)| *b) else {
-        return Ok(Photo::Placeholder(blank_card()));
+    // An uploaded photo wins over the compiled-in one.
+    let uploaded = UPLOADED.lock().unwrap().get(&sku).map(|(_, bytes)| bytes.clone());
+    let source = match uploaded {
+        Some(bytes) => Source::Uploaded(bytes),
+        None => match EMBEDDED.iter().find(|(s, _)| *s == sku) {
+            Some((_, bytes)) => Source::Embedded(bytes),
+            // A product nobody has photographed yet: a flat oat card.
+            None => return Ok(Photo::Placeholder(blank_card())),
+        },
     };
 
     if width == WIDTHS[2] {
-        return Ok(Photo::Original(original));
+        return Ok(match source {
+            Source::Uploaded(bytes) => Photo::Resized(bytes),
+            Source::Embedded(bytes) => Photo::Original(bytes),
+        });
     }
     if let Some(bytes) = RESIZED.lock().unwrap().get(&(sku.clone(), width)) {
         return Ok(Photo::Resized(bytes.clone()));
@@ -151,7 +226,11 @@ async fn photo(cx: &Cx) -> Result<Photo> {
 
     // Decode + Lanczos + encode holds a core for ~100 ms: that belongs on
     // the blocking pool, not on the reactor.
-    let bytes = tokio::task::spawn_blocking(move || resize(original, width)).await??;
+    let bytes = tokio::task::spawn_blocking(move || match source {
+        Source::Uploaded(original) => resize(&original, width),
+        Source::Embedded(original) => resize(original, width),
+    })
+    .await??;
     let bytes = Arc::new(bytes);
     RESIZED.lock().unwrap().insert((sku, width), bytes.clone());
     Ok(Photo::Resized(bytes))

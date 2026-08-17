@@ -1,5 +1,6 @@
 //! The data layer: pool, migrations, and every query the shop runs. Queries
-//! live here rather than in the pages so the SQL can be read in one place.
+//! live here rather than in the pages so the SQL can be read in one place --
+//! and so swapping SQLite for a Turso-backed pool touches one file.
 
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
@@ -18,6 +19,7 @@ pub type Error = anyhow::Error;
 pub struct Product {
     pub sku: String,
     pub name: String,
+    pub summary: String,
     pub detail: String,
     pub price_cents: i64,
     pub stock: i64,
@@ -939,6 +941,56 @@ pub async fn admin_customers(pool: &SqlitePool) -> Result<Vec<AdminCustomer>, Er
     .await?)
 }
 
+pub async fn set_price(pool: &SqlitePool, sku: &str, price_cents: i64) -> Result<(), Error> {
+    sqlx::query("update products set price_cents = ?2 where sku = ?1")
+        .bind(sku)
+        .bind(price_cents.max(0))
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Sets one variant's stock and keeps the product total in step -- the
+/// product row is a cache of the sum, never the source of truth.
+pub async fn set_stock(
+    pool: &SqlitePool,
+    sku: &str,
+    size: &str,
+    stock: i64,
+) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("update variants set stock = ?3 where sku = ?1 and size = ?2")
+        .bind(sku)
+        .bind(size)
+        .bind(stock.max(0))
+        .execute(&mut *tx)
+        .await?;
+    resum_stock(&mut tx, sku).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+// --- photos
+
+pub async fn put_photo(pool: &SqlitePool, sku: &str, bytes: &[u8]) -> Result<(), Error> {
+    sqlx::query(
+        "insert into photos (sku, bytes, created_at) values (?1, ?2, ?3) \
+         on conflict(sku) do update set bytes = ?2, created_at = ?3",
+    )
+    .bind(sku)
+    .bind(bytes)
+    .bind(Utc::now().to_rfc3339())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn all_photos(pool: &SqlitePool) -> Result<Vec<(String, Vec<u8>)>, Error> {
+    Ok(sqlx::query_as("select sku, bytes from photos").fetch_all(pool).await?)
+}
+
+// --- admin: products
+
 /// Every product, hidden ones included: the back office has no curtain.
 pub async fn all_products(pool: &SqlitePool) -> Result<Vec<Product>, Error> {
     Ok(sqlx::query_as::<_, Product>(AssertSqlSafe(format!(
@@ -946,4 +998,123 @@ pub async fn all_products(pool: &SqlitePool) -> Result<Vec<Product>, Error> {
     )))
     .fetch_all(pool)
     .await?)
+}
+
+pub async fn toggle_hidden(pool: &SqlitePool, sku: &str) -> Result<(), Error> {
+    sqlx::query("update products set hidden = 1 - hidden where sku = ?1")
+        .bind(sku)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn create_product(
+    pool: &SqlitePool,
+    sku: &str,
+    name: &str,
+    summary: &str,
+    detail: &str,
+    price_cents: i64,
+    category: &str,
+    material: &str,
+    is_new: i64,
+    stock: i64,
+) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "insert into products (sku, name, summary, detail, price_cents, stock, category, \
+         is_new, material) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+    )
+    .bind(sku)
+    .bind(name.trim())
+    .bind(summary.trim())
+    .bind(detail.trim())
+    .bind(price_cents.max(0))
+    .bind(stock.max(0))
+    .bind(category.trim())
+    .bind(is_new)
+    .bind(material.trim())
+    .execute(&mut *tx)
+    .await?;
+    // The one-size row the cart reads its stock from; sizes come later.
+    sqlx::query("insert into variants (sku, size, stock, rank) values (?1, '', ?2, 1)")
+        .bind(sku)
+        .bind(stock.max(0))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn update_product(
+    pool: &SqlitePool,
+    sku: &str,
+    name: &str,
+    summary: &str,
+    detail: &str,
+    category: &str,
+    material: &str,
+    is_new: i64,
+) -> Result<(), Error> {
+    sqlx::query(
+        "update products set name = ?2, summary = ?3, detail = ?4, category = ?5, \
+         material = ?6, is_new = ?7 where sku = ?1",
+    )
+    .bind(sku)
+    .bind(name.trim())
+    .bind(summary.trim())
+    .bind(detail.trim())
+    .bind(category.trim())
+    .bind(material.trim())
+    .bind(is_new)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn resum_stock(tx: &mut sqlx::SqliteConnection, sku: &str) -> Result<(), Error> {
+    sqlx::query(
+        "update products set stock = \
+         (select coalesce(sum(stock), 0) from variants where sku = ?1) where sku = ?1",
+    )
+    .bind(sku)
+    .execute(tx)
+    .await?;
+    Ok(())
+}
+
+pub async fn add_variant(
+    pool: &SqlitePool,
+    sku: &str,
+    size: &str,
+    stock: i64,
+) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "insert into variants (sku, size, stock, rank) values (?1, ?2, ?3, \
+         (select coalesce(max(rank), 0) + 1 from variants where sku = ?1)) \
+         on conflict(sku, size) do update set stock = ?3",
+    )
+    .bind(sku)
+    .bind(size.trim())
+    .bind(stock.max(0))
+    .execute(&mut *tx)
+    .await?;
+    resum_stock(&mut tx, sku).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn remove_variant(pool: &SqlitePool, sku: &str, size: &str) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("delete from variants where sku = ?1 and size = ?2")
+        .bind(sku)
+        .bind(size)
+        .execute(&mut *tx)
+        .await?;
+    resum_stock(&mut tx, sku).await?;
+    tx.commit().await?;
+    Ok(())
 }
