@@ -1,0 +1,13 @@
+# Build artifacts, in every crate of the workspace tree.
+target/
+build/
+# Local wrangler state: miniflare D1, caches, account file.
+.wrangler/
+node_modules/
+.DS_Store
+# Local SQLite bases.
+boutique.db*
+bernard.db
+
+# Catalog photography: sourced per install, never committed. See README.
+assets/photos/

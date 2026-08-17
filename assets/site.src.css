@@ -1,0 +1,185 @@
+/* The house design system. Tailwind v4 reads the tokens below and only
+   emits the utilities the Rust sources actually use. */
+
+@import "tailwindcss" source(none);
+@source "../src";
+
+/* Every navigation cross-fades, and elements sharing a view-transition-name
+   morph between pages — the catalogue tile grows into the product image.
+   Pure CSS: the site is a real multi-page app, which is what this API is
+   made for. */
+@view-transition {
+  navigation: auto;
+}
+
+/* The morph name comes from data-vt via typed attr() — Chrome honours it,
+   other engines fall back to the plain cross-fade. A dynamic style=
+   attribute would have been simpler, but it trips a topcoat-view bug. */
+[data-vt] {
+  view-transition-name: attr(data-vt type(<custom-ident>));
+}
+
+/* Each photo's average colour paints its tile while the JPEG travels.
+   Same trick as data-vt: a typed attr() instead of a dynamic style=
+   attribute, which would trip the topcoat-view hydration bug. Engines
+   without typed attr() drop the rule and keep the utility background. */
+[data-fond] {
+  background-color: attr(data-fond type(<color>), var(--color-oat-100));
+}
+
+/* The free-shipping gauge: its fill is server arithmetic, carried the
+   same way. Engines without typed attr() keep the text line and lose
+   only the bar. */
+[data-jauge] {
+  width: attr(data-jauge type(<percentage>), 0%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+@theme {
+  /* Oat — the warm ground the whole shop sits on, in place of cold greys. */
+  --color-oat-50: #fbf9f5;
+  --color-oat-100: #f5f1e8;
+  --color-oat-200: #ebe4d6;
+  --color-oat-300: #dbd0bb;
+  --color-oat-400: #c2b294;
+  --color-oat-500: #a89572;
+  --color-oat-600: #8a7757;
+  --color-oat-700: #6b5c45;
+  --color-oat-800: #473f32;
+  --color-oat-900: #2b2620;
+
+  /* Gin — the single accent, a cool sage green. One colour, used
+     sparingly, does the work. https://uicolors.app/generate/53946c */
+  --color-gin-50: #f4f9f6;
+  --color-gin-100: #e9f4ed;
+  --color-gin-200: #cde5d5;
+  --color-gin-300: #a6cfb6;
+  --color-gin-400: #77b18d;
+  --color-gin-500: #53946c;
+  --color-gin-600: #417856;
+  --color-gin-700: #356046;
+  --color-gin-800: #2e4d3b;
+  --color-gin-900: #274031;
+
+  /* Terracotta — reserved for sale tags and destructive actions. */
+  --color-brique-100: #f6e7e0;
+  --color-brique-500: #b5613f;
+  --color-brique-700: #8a4529;
+
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* A helper bubble that says its piece then leaves: fade in, hold two
+     seconds, fade out and stay gone (forwards). display:none resets the
+     animation, so every reveal replays it from the start. */
+  --animate-bulle: bulle 2.6s ease forwards;
+  @keyframes bulle {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    8% {
+      opacity: 1;
+      transform: none;
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Content swapped in by a shard fades up instead of popping. */
+  --animate-apparition: apparition 0.3s ease both;
+  @keyframes apparition {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-oat-50);
+    color: var(--color-oat-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Titles are the serif; the weight comes from size, not from bold. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  /* A paper grain over everything — present enough to be felt as texture
+     on the flat surfaces, still too fine to fuzz a photo. Fixed, above
+     the content, transparent to the pointer. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.09;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+
+  /* Tailwind v4 dropped preflight's pointer on buttons; the shop keeps
+     it — anything clickable should say so, disabled things should not. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  select,
+  input[type="radio"],
+  input[type="checkbox"] {
+    cursor: pointer;
+  }
+
+  summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  ::selection {
+    background-color: var(--color-gin-200);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-gin-600);
+    outline-offset: 2px;
+  }
+}
+
+/* htmx-era leftovers the runtime still leans on. */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}

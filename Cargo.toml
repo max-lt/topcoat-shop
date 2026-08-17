@@ -1,0 +1,14 @@
+[package]
+name = "topcoat-shop"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+topcoat = { version = "0.5.0", features = ["font-fontsource", "tailwind"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+serde = { version = "1.0.229", features = ["derive"] }
+anyhow = "1.0.104"
+
+[build-dependencies]
+topcoat = { version = "0.5.0", default-features = false, features = ["tailwind"] }
