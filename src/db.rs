@@ -460,6 +460,77 @@ pub async fn item_count(pool: &SqlitePool, cart_id: &str) -> Result<i64, Error> 
     )
 }
 
+/// Returns true when the address is new; resubscribing changes nothing.
+pub async fn subscribe(pool: &SqlitePool, email: &str) -> Result<bool, Error> {
+    let inserted = sqlx::query("insert or ignore into subscribers (email, created_at) values (?1, ?2)")
+        .bind(email.trim().to_lowercase())
+        .bind(Utc::now().to_rfc3339())
+        .execute(pool)
+        .await?
+        .rows_affected();
+    Ok(inserted > 0)
+}
+
+// --- reviews
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Review {
+    pub author: String,
+    pub rating: i64,
+    pub text: String,
+    pub created_at: String,
+}
+
+/// Newest first. The shop is small enough to show every review in full.
+pub async fn product_reviews(pool: &SqlitePool, sku: &str) -> Result<Vec<Review>, Error> {
+    Ok(sqlx::query_as::<_, Review>(
+        "select author, rating, text, created_at from reviews where sku = ?1 \
+         order by created_at desc",
+    )
+    .bind(sku)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn add_review(
+    pool: &SqlitePool,
+    sku: &str,
+    author: &str,
+    rating: i64,
+    text: &str,
+) -> Result<(), Error> {
+    sqlx::query(
+        "insert into reviews (sku, author, rating, text, created_at) values (?1, ?2, ?3, ?4, ?5)",
+    )
+    .bind(sku)
+    .bind(author)
+    .bind(rating.clamp(1, 5))
+    .bind(text.trim())
+    .bind(Utc::now().to_rfc3339())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Back-in-stock alert. Asking twice for the same size is a no-op.
+pub async fn create_stock_alert(
+    pool: &SqlitePool,
+    sku: &str,
+    size: &str,
+    email: &str,
+) -> Result<(), Error> {
+    sqlx::query(
+        "insert or ignore into stock_alerts (sku, size, email, created_at) values (?1, ?2, ?3, ?4)",
+    )
+    .bind(sku)
+    .bind(size)
+    .bind(email.trim().to_lowercase())
+    .bind(Utc::now().to_rfc3339())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 // --- orders
 
 /// Clamps a cart to the stock actually on the shelves: lines whose item is

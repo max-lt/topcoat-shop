@@ -5,8 +5,8 @@
 
 use topcoat::context::Cx;
 use topcoat::font;
-use topcoat::router::error::NotFoundError;
-use topcoat::router::{layout, page, query_params, uri, StatusCode};
+use topcoat::router::error::{see_other, NotFoundError, SeeOther};
+use topcoat::router::{content::Form, layout, page, query_params, route, uri, StatusCode};
 use topcoat::tailwind;
 use topcoat::view::{component, view};
 use topcoat::Result;
@@ -313,10 +313,33 @@ const PROMISES: [(&str, &str, &str); 4] = [
     ("🦀", "Fait à Brest", "Dessiné au bord de l'eau, produit au plus près."),
 ];
 
+#[query_params(error = bad_request)]
+struct NewsletterState {
+    lettre: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct Subscription {
+    email: String,
+}
+
+/// A plain form POST with a redirect: refresh-proof, JavaScript-free.
+#[route(POST "/newsletter")]
+async fn subscribe(cx: &Cx, Form(f): Form<Subscription>) -> Result<SeeOther> {
+    if !f.email.contains('@') {
+        return Ok(see_other("/?lettre=invalide#lettre"));
+    }
+    db::subscribe(pool(cx), &f.email).await?;
+    Ok(see_other("/?lettre=merci#lettre"))
+}
+
 #[page("/")]
 async fn home(cx: &Cx) -> Result {
     let featured = db::new_arrivals(pool(cx), 4).await?;
     let categories = db::categories(pool(cx)).await?;
+    let letter = query_params::<NewsletterState>(cx)?.lettre.clone().unwrap_or_default();
+    let thanks = letter == "merci";
+    let invalid = letter == "invalide";
 
     view! {
         <section class="grid items-center gap-12 lg:grid-cols-2">
@@ -396,6 +419,39 @@ async fn home(cx: &Cx) -> Result {
                         <p class=("mt-1 text-sm leading-relaxed ".to_string() + MUTED)>(text)</p>
                     </div>
                 }
+            </div>
+        </section>
+
+        <section id="lettre" class="relative mt-24 overflow-hidden rounded-3xl bg-gin-900 px-6 py-14 text-center sm:px-10">
+            // The tide itself, blurred behind the same green veil as the
+            // order banner: one letter per tide, and here is the tide.
+            <img src=(crate::images::url("lettre-maree", 900))
+                 alt=""
+                 aria-hidden="true"
+                 loading="lazy"
+                 class="absolute inset-0 h-full w-full scale-110 object-cover blur-[3px]">
+            <div class="absolute inset-0 bg-gin-900/70"></div>
+            <div class="relative">
+            <p class="text-xs font-medium uppercase tracking-[0.2em] text-gin-200">"La lettre de la coquille"</p>
+            <h2 class="mt-3 text-3xl text-oat-50 sm:text-4xl">"Une lettre par marée, pas plus"</h2>
+            <p class="mx-auto mt-4 max-w-xl leading-relaxed text-gin-100">
+                "Les nouvelles séries, les retours en stock et un billet du journal. \
+                 Environ une par mois, désinscription en un clic."
+            </p>
+            if thanks {
+                <p class="animate-apparition mx-auto mt-8 inline-flex items-center gap-2 rounded-full bg-oat-50 px-5 py-2.5 text-sm font-medium text-gin-800">
+                    "✓ Bienvenue à bord — première lettre à la prochaine marée."
+                </p>
+            } else {
+                <form method="post" action="/newsletter" class="mx-auto mt-8 flex max-w-md gap-3">
+                    <input name="email" type="email" required="required" placeholder="vous@exemple.fr"
+                           class="w-full rounded-full bg-gin-900/60 px-5 py-2.5 text-sm text-oat-50 ring-1 ring-gin-600 outline-none transition placeholder:text-gin-300 focus:ring-2 focus:ring-oat-50">
+                    <button class="shrink-0 rounded-full bg-oat-50 px-5 py-2.5 text-sm font-medium text-gin-900 transition hover:bg-oat-100">"S'abonner"</button>
+                </form>
+                if invalid {
+                    <p class="mt-4 text-sm text-brique-100">"Cette adresse ne ressemble pas à une adresse."</p>
+                }
+            }
             </div>
         </section>
 

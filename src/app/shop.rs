@@ -3,14 +3,14 @@
 //! before a single line of JavaScript has run.
 
 use topcoat::context::Cx;
-use topcoat::router::error::RouterErrorExt;
-use topcoat::router::{page, path_param, query_params};
+use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
+use topcoat::router::{content::Form, page, path_param, query_params, route};
 use topcoat::runtime::{procedure, shard, Event};
 use topcoat::view::view;
 use topcoat::Result;
 
-use crate::app::context::{current_cart, pool};
-use crate::app::{page_heading, product_tile, BTN, BTN_OUTLINE, EYEBROW, FIELD, MUTED, SOFT};
+use crate::app::context::{current_cart, current_user, note_seen, pool};
+use crate::app::{page_heading, product_tile, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 const SORTS: [(i64, &str); 4] = [
@@ -235,6 +235,35 @@ async fn product(cx: &Cx) -> Result {
     let p = db::product(pool(cx), &sku).await?.filter(|p| p.hidden == 0).ok_or_not_found()?;
     let variants = db::variants(pool(cx), &sku).await?;
     let related = db::related_products(pool(cx), &sku, &p.category).await?;
+    let reviews = db::product_reviews(pool(cx), &sku).await?;
+    let signed_in = current_user(cx).await?.is_some();
+
+    // The shelf shows what the visitor saw before this page, not this page.
+    let seen_before = note_seen(cx, &sku);
+    let mut already_seen = Vec::new();
+    for s in seen_before.iter().take(4) {
+        if let Some(seen) = db::product(pool(cx), s).await? {
+            already_seen.push(seen);
+        }
+    }
+    let has_seen = !already_seen.is_empty();
+
+    let state = query_params::<ProductState>(cx)?;
+    let alert_thanks = state.alert.as_deref() == Some("merci");
+    let review_thanks = state.review.as_deref() == Some("merci");
+    let review_count = reviews.len();
+    let average = if review_count > 0 {
+        reviews.iter().map(|r| r.rating).sum::<i64>() as f64 / review_count as f64
+    } else {
+        0.0
+    };
+    let missing: Vec<String> = variants
+        .iter()
+        .filter(|v| !v.size.is_empty() && v.stock == 0)
+        .map(|v| v.size.clone())
+        .collect();
+    let has_missing = !missing.is_empty();
+
     let has_sizes = variants.iter().any(|v| !v.size.is_empty());
     let sold_out = p.sold_out();
     let low = p.low_stock();
@@ -301,6 +330,18 @@ async fn product(cx: &Cx) -> Result {
                     <p class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">
                         "Épuisé pour le moment. La prochaine série arrive avec la marée."
                     </p>
+                    if alert_thanks {
+                        <p class="animate-apparition mt-4 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800" id="dispo">
+                            "C'est noté — un mot dès que la marée le ramène."
+                        </p>
+                    } else {
+                        <form method="post" action="/alerte" class="mt-4 flex flex-wrap items-center gap-2" id="dispo">
+                            <input type="hidden" name="sku" value=(&p.sku)>
+                            <input type="hidden" name="size" value="">
+                            <input class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300" type="email" name="email" required="required" placeholder="vous@exemple.fr" aria-label="Votre email">
+                            <button class=(BTN_OUTLINE)>"Me prévenir du retour"</button>
+                        </form>
+                    }
                 } else {
                     if has_sizes {
                         <div class="mt-8">
@@ -328,6 +369,29 @@ async fn product(cx: &Cx) -> Result {
                                 }
                             </div>
 
+                            if has_missing {
+                                if alert_thanks {
+                                    <p class="animate-apparition mt-3 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800" id="dispo">
+                                        "C'est noté — un mot dès que la taille revient."
+                                    </p>
+                                } else {
+                                    <details class="mt-3" id="dispo">
+                                        <summary class=("text-sm underline underline-offset-4 ".to_string() + MUTED)>
+                                            "Votre taille manque ? On vous prévient dès son retour."
+                                        </summary>
+                                        <form method="post" action="/alerte" class="mt-3 flex flex-wrap items-center gap-2">
+                                            <input type="hidden" name="sku" value=(&p.sku)>
+                                            <select name="size" class="rounded-xl bg-white px-3 py-2.5 text-sm ring-1 ring-oat-300" aria-label="Taille épuisée">
+                                                for s in &missing {
+                                                    <option value=(s)>(s)</option>
+                                                }
+                                            </select>
+                                            <input class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300" type="email" name="email" required="required" placeholder="vous@exemple.fr" aria-label="Votre email">
+                                            <button class=(BTN_OUTLINE)>"Me prévenir"</button>
+                                        </form>
+                                    </details>
+                                }
+                            }
                         </div>
                     }
 
@@ -369,6 +433,62 @@ async fn product(cx: &Cx) -> Result {
             </div>
         </div>
 
+        <section class="mt-24" id="avis">
+            <div class="flex flex-wrap items-baseline justify-between gap-4">
+                <h2 class="text-3xl">"Les avis"</h2>
+                if review_count > 0 {
+                    <p class=("text-sm ".to_string() + MUTED)>
+                        <span class="tracking-wider text-gin-700">(stars(average.round() as i64))</span>
+                        (format!(" {average:.1} sur 5 — {review_count} avis"))
+                    </p>
+                }
+            </div>
+
+            if review_count == 0 {
+                <p class=("mt-6 ".to_string() + SOFT)>"Pas encore d'avis — cette pièce attend son premier retour."</p>
+            } else {
+                <ul class="mt-8 grid gap-6 lg:grid-cols-2">
+                    for r in &reviews {
+                        <li class=(CARD.to_string() + " p-6")>
+                            <div class="flex items-baseline justify-between gap-3">
+                                <span class="font-medium">(&r.author)</span>
+                                <span class="text-sm tracking-wider text-gin-700" role="img" aria-label=(format!("{} sur 5", r.rating))>(stars(r.rating))</span>
+                            </div>
+                            <p class=("mt-3 text-sm leading-relaxed ".to_string() + SOFT)>(&r.text)</p>
+                            <time class=("mt-3 block text-xs ".to_string() + MUTED)>(r.created_at.get(..10).unwrap_or_default().to_string())</time>
+                        </li>
+                    }
+                </ul>
+            }
+
+            if review_thanks {
+                <p class="animate-apparition mt-8 inline-flex rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50">"Merci pour votre avis !"</p>
+            } else {
+                if signed_in {
+                    <form method="post" action=(format!("/produit/{}/avis", p.sku)) class=(CARD.to_string() + " mt-8 max-w-xl space-y-4 p-6")>
+                        <p class="font-medium">"Votre avis"</p>
+                        <div class="flex items-center gap-3">
+                            <label class="text-sm" for="note">"Note"</label>
+                            <select id="note" name="rating" class="rounded-xl bg-oat-50 px-3 py-2 text-sm ring-1 ring-oat-300">
+                                <option value="5">"5 — Impeccable"</option>
+                                <option value="4">"4 — Très bien"</option>
+                                <option value="3">"3 — Correct"</option>
+                                <option value="2">"2 — Déçu"</option>
+                                <option value="1">"1 — Non"</option>
+                            </select>
+                        </div>
+                        <textarea name="text" rows="3" required="required" minlength="10" class=(FIELD) placeholder="La matière, la coupe, la vie avec."></textarea>
+                        <button class=(BTN)>"Publier"</button>
+                    </form>
+                } else {
+                    <p class=("mt-8 text-sm ".to_string() + MUTED)>
+                        <a href="/connexion" class="underline underline-offset-4">"Connectez-vous"</a>
+                        " pour laisser un avis."
+                    </p>
+                }
+            }
+        </section>
+
         <section class="mt-24">
             <h2 class="text-3xl">"À voir aussi"</h2>
             <div class="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-3">
@@ -377,5 +497,76 @@ async fn product(cx: &Cx) -> Result {
                 }
             </div>
         </section>
+
+        if has_seen {
+            <section class="mt-24">
+                <h2 class="text-3xl">"Déjà regardés"</h2>
+                <div class="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+                    for seen in already_seen {
+                        product_tile(p: seen)
+                    }
+                </div>
+            </section>
+        }
     }
+}
+
+// --- reviews and stock alerts
+
+#[query_params(error = bad_request)]
+struct ProductState {
+    #[serde(rename = "alerte")]
+    alert: Option<String>,
+    #[serde(rename = "avis")]
+    review: Option<String>,
+}
+
+fn stars(rating: i64) -> String {
+    let full = rating.clamp(0, 5) as usize;
+    "★".repeat(full) + &"☆".repeat(5 - full)
+}
+
+/// "Camille Rivoal" becomes "Camille R." -- a review signs with a first
+/// name, not a directory entry.
+fn short_name(name: &str) -> String {
+    let mut words = name.split_whitespace();
+    let first = words.next().unwrap_or("Client");
+    match words.last().and_then(|rest| rest.chars().next()) {
+        Some(initial) => format!("{first} {initial}."),
+        None => first.to_string(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct AlertRequest {
+    sku: String,
+    #[serde(default)]
+    size: String,
+    email: String,
+}
+
+/// PRG: the alert lands in the base, the visitor lands back on the page.
+#[route(POST "/alerte")]
+async fn stock_alert(cx: &Cx, Form(f): Form<AlertRequest>) -> Result<SeeOther> {
+    db::product(pool(cx), &f.sku).await?.ok_or_not_found()?;
+    db::create_stock_alert(pool(cx), &f.sku, &f.size, &f.email).await?;
+    Ok(see_other(&format!("/produit/{}?alerte=merci#dispo", f.sku)))
+}
+
+#[derive(serde::Deserialize)]
+struct NewReview {
+    rating: i64,
+    text: String,
+}
+
+#[route(POST "/produit/{sku}/avis")]
+async fn publish_review(cx: &Cx, Form(f): Form<NewReview>) -> Result<SeeOther> {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    let sku = path_param::<Sku>(cx).to_string();
+    db::product(pool(cx), &sku).await?.ok_or_not_found()?;
+    if f.text.trim().len() < 10 {
+        return Ok(see_other(&format!("/produit/{sku}#avis")));
+    }
+    db::add_review(pool(cx), &sku, &short_name(&user.name), f.rating, &f.text).await?;
+    Ok(see_other(&format!("/produit/{sku}?avis=merci#avis")))
 }

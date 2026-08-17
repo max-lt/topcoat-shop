@@ -53,6 +53,30 @@ pub fn forget_cart(cx: &Cx) {
     cookies(cx).remove(Cookie::build((CART_COOKIE, "")).path("/").build());
 }
 
+pub const SEEN_COOKIE: &str = "seen";
+
+/// Records a product view in the seen cookie and returns what the visitor
+/// had already seen, most recent first -- the "déjà regardés" shelf.
+pub fn note_seen(cx: &Cx, sku: &str) -> Vec<String> {
+    let jar = cookies(cx);
+    let before: Vec<String> = jar
+        .get(SEEN_COOKIE)
+        .map(|c| c.value().split(',').filter(|s| !s.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default();
+    let others: Vec<String> = before.iter().filter(|s| s.as_str() != sku).cloned().collect();
+
+    let mut updated = vec![sku.to_string()];
+    updated.extend(others.iter().cloned());
+    updated.truncate(9);
+    jar.add(cookie! {
+        "seen" = updated.join(",");
+        Path = "/";
+        HttpOnly;
+        SameSite = Lax;
+    });
+    others
+}
+
 fn random_id() -> String {
     const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
     let mut raw = [0u8; 24];
