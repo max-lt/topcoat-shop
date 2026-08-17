@@ -477,20 +477,21 @@ async fn home(cx: &Cx) -> Result {
 
             <div class="grid grid-cols-2 gap-4">
                 for (i, p) in featured.iter().enumerate() {
-                    // The second tile drops for a hand-stacked, off-grid look.
-                    <a href=("/produit/".to_string() + &p.sku)
-                       data-bg=(crate::images::background(&p.sku))
-                       class=(if i % 2 == 1 {
-                           "block aspect-square overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-oat-900/10 sm:translate-y-6"
-                       } else {
-                           "block aspect-square overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-oat-900/10"
-                       })>
-                        <img src=(crate::images::url(&p.sku, 400))
-                             srcset=(format!("{} 400w, {} 900w", crate::images::url(&p.sku, 400), crate::images::url(&p.sku, 900)))
-                             sizes="(min-width: 1024px) 25vw, 50vw"
-                             alt=(&p.name)
-                             class="h-full w-full object-cover">
-                    </a>
+                    // The right column drops for a hand-stacked, off-grid look.
+                    // The drop rides the wrapper and the hover lift the link, or
+                    // the two would write the same translate and the tile would
+                    // leap over its neighbour.
+                    <div class=(if i % 2 == 1 { "sm:translate-y-6" } else { "" })>
+                        <a href=("/produit/".to_string() + &p.sku)
+                           data-bg=(crate::images::background(&p.sku))
+                           class="block aspect-square overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-oat-900/10">
+                            <img src=(crate::images::url(&p.sku, 400))
+                                 srcset=(format!("{} 400w, {} 900w", crate::images::url(&p.sku, 400), crate::images::url(&p.sku, 900)))
+                                 sizes="(min-width: 1024px) 25vw, 50vw"
+                                 alt=(&p.name)
+                                 class="h-full w-full object-cover">
+                        </a>
+                    </div>
                 }
             </div>
         </section>
