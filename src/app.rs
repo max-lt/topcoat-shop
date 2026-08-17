@@ -3,10 +3,12 @@
 //! gin-green accent, a serif for anything that speaks and a sans for anything
 //! that informs.
 
+use serde::Serialize;
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, NotFoundError, SeeOther};
 use topcoat::router::request::uri;
-use topcoat::router::{content::Form, layout, page, query_params, route, StatusCode};
+use topcoat::router::{content::Form, href, layout, page, query_params, route, StatusCode};
+use topcoat::runtime::{shard, Event};
 use topcoat::view::{component, view};
 use topcoat::Result;
 
@@ -176,6 +178,46 @@ async fn head_assets() -> Result {
 // the rest of the site wears.
 topcoat::router::not_found!("/");
 
+#[derive(Serialize)]
+struct Term<'a> {
+    q: &'a str,
+}
+
+/// The header's panel, re-rendered by the server on every keystroke. It
+/// draws its own box, so an empty field leaves nothing behind.
+#[shard]
+async fn suggestions(cx: &Cx, term: String) -> Result {
+    let term = term.trim().to_string();
+    let found = if term.is_empty() { Vec::new() } else { db::search(pool(cx), &term).await? };
+    let how_many = found.len();
+    let shown: Vec<Product> = found.into_iter().take(5).collect();
+    let nothing = !term.is_empty() && shown.is_empty();
+
+    view! {
+        if !term.is_empty() {
+            <div class="animate-apparition rounded-2xl bg-white p-2 shadow-lg ring-1 ring-oat-200">
+                if nothing {
+                    <p class=("px-3 py-2 text-sm ".to_string() + MUTED)>"Rien pour « " (&term) " »"</p>
+                } else {
+                    for p in shown {
+                        <a href=("/produit/".to_string() + &p.sku)
+                           class="flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-oat-100">
+                            <img src=(crate::images::url(&p.sku, 400)) alt=""
+                                 class="h-10 w-10 shrink-0 rounded-lg object-cover">
+                            <span class="min-w-0 flex-1 truncate text-sm">(&p.name)</span>
+                            <span class="shrink-0 text-sm tabular-nums">(format_price(p.price_cents))</span>
+                        </a>
+                    }
+                    <a href=(href!("/recherche").query(Term { q: &term }))
+                       class=("mt-1 block rounded-xl px-3 py-2 text-sm underline underline-offset-4 ".to_string() + MUTED)>
+                        (format!("Voir {how_many} résultat{}", if how_many > 1 { "s" } else { "" }))
+                    </a>
+                }
+            </div>
+        }
+    }
+}
+
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Result) -> Result {
     let visitor = current_user(cx).await?;
@@ -283,15 +325,25 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                             }
                         </nav>
 
-                        // Topcoat 0.5 hydrates the runtime inside pages only, never
-                        // inside a layout: a signal declared here would never be
-                        // wired up. So the header stays a real form -- Enter or the
-                        // arrow opens /recherche, where results do update live.
-                        <form action="/recherche" method="get" class="relative ml-auto hidden lg:block">
+                        signal term = String::new();
+                        // focusin/focusout rather than focus/blur: they bubble, so
+                        // the panel survives a click on one of its own links.
+                        signal open = 0.0;
+
+                        // Still a real form: without JavaScript, Enter or the arrow
+                        // opens /recherche, which searches on its own.
+                        <form action="/recherche" method="get" class="relative ml-auto hidden lg:block"
+                              @focusin=$(|_e| open.set(1.0))
+                              @focusout=$(|_e| open.set(0.0))>
                             <input name="q" type="search" autocomplete="off" placeholder="Chercher"
-                                   class="w-56 rounded-full bg-white py-2 pl-4 pr-10 text-sm ring-1 ring-oat-200 outline-none transition placeholder:text-oat-500 focus:ring-2 focus:ring-gin-600">
+                                   class="w-56 rounded-full bg-white py-2 pl-4 pr-10 text-sm ring-1 ring-oat-200 outline-none transition placeholder:text-oat-500 focus:ring-2 focus:ring-gin-600"
+                                   :value=$(term.get())
+                                   @input=$(|e: Event| term.set(e.target.value))>
                             <button aria-label="Chercher"
                                     class="absolute inset-y-0 right-1 my-auto flex h-8 w-8 items-center justify-center rounded-full text-oat-600 transition hover:bg-oat-100 hover:text-gin-700">"→"</button>
+                            <div class="absolute right-0 top-full z-50 mt-2 w-80" :hidden=$(open.get() == 0.0)>
+                                suggestions(term: $(term.get()))
+                            </div>
                         </form>
 
                         <div class="ml-auto flex items-center gap-4 lg:ml-0">
