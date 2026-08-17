@@ -14,7 +14,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use topcoat::context::Cx;
-use topcoat::router::{path_param, query_params, route, Body, IntoResponse, Response};
+use topcoat::router::response::{IntoResponse, Response};
+use topcoat::router::{path_param, query_params, route, Body};
 use topcoat::Result;
 
 /// The only widths ever produced: catalog tile, product page, original.
@@ -178,8 +179,7 @@ impl IntoResponse for Photo {
     }
 }
 
-#[path_param]
-struct Sku(str);
+path_param!(sku);
 
 #[query_params(error = bad_request)]
 struct Width {

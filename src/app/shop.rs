@@ -224,8 +224,7 @@ async fn add(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
     Ok(total as f64)
 }
 
-#[path_param]
-struct Sku(str);
+path_param!(sku);
 
 #[page("/produit/{sku}")]
 async fn product(cx: &Cx) -> Result {
@@ -558,7 +557,7 @@ struct AlertRequest {
 async fn stock_alert(cx: &Cx, Form(f): Form<AlertRequest>) -> Result<SeeOther> {
     db::product(pool(cx), &f.sku).await?.ok_or_not_found()?;
     db::create_stock_alert(pool(cx), &f.sku, &f.size, &f.email).await?;
-    Ok(see_other(&format!("/produit/{}?alerte=merci#dispo", f.sku)))
+    Ok(see_other(format!("/produit/{}?alerte=merci#dispo", f.sku)))
 }
 
 #[derive(serde::Deserialize)]
@@ -573,8 +572,8 @@ async fn publish_review(cx: &Cx, Form(f): Form<NewReview>) -> Result<SeeOther> {
     let sku = path_param::<Sku>(cx).to_string();
     db::product(pool(cx), &sku).await?.ok_or_not_found()?;
     if f.text.trim().len() < 10 {
-        return Ok(see_other(&format!("/produit/{sku}#avis")));
+        return Ok(see_other(format!("/produit/{sku}#avis")));
     }
     db::add_review(pool(cx), &sku, &short_name(&user.name), f.rating, &f.text).await?;
-    Ok(see_other(&format!("/produit/{sku}?avis=merci#avis")))
+    Ok(see_other(format!("/produit/{sku}?avis=merci#avis")))
 }

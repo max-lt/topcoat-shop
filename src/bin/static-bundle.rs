@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::router::{to_bytes, Body, Request, Router, RouterBuilderDiscoverExt, StatusCode};
+use topcoat::router::request::Request;
+use topcoat::router::{to_bytes, Body, Router, RouterBuilderDiscoverExt, StatusCode};
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
 use topcoat_shop::bundle;

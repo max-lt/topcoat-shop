@@ -9,7 +9,8 @@ use std::rc::Rc;
 
 use topcoat::context::Cx;
 use topcoat::router::error::RouterErrorExt;
-use topcoat::router::{path_param, route, Body, IntoResponse, Response};
+use topcoat::router::response::{IntoResponse, Response};
+use topcoat::router::{path_param, route, Body};
 use topcoat::Result;
 use worker::js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
 use worker::wasm_bindgen::{JsCast, JsValue};
@@ -192,13 +193,12 @@ pub fn store(sku: &str, raw: Vec<u8>) -> impl std::future::Future<Output = Resul
     })
 }
 
-#[path_param]
-struct Sku(str);
+path_param!(sku);
 
 #[route(GET "/img/{sku}")]
 async fn photo(cx: &Cx) -> Result<Payload> {
     let sku = path_param::<Sku>(cx).to_string();
-    let requested: u32 = topcoat::router::uri(cx)
+    let requested: u32 = topcoat::router::request::uri(cx)
         .query()
         .and_then(|q| {
             q.split('&').find_map(|p| p.strip_prefix("w=").and_then(|v| v.parse().ok()))

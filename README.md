@@ -22,6 +22,10 @@ DATABASE_URL=shop.db ./target/debug/topcoat-shop   # HOST/PORT to override 127.0
 Migrations run at startup and seed the catalog. The first admin is
 promoted by hand: `update users set admin = 1 where email = '...'`.
 
+The bundle lands beside the binary it was scanned from, and that is the
+only place the binary looks: a release build needs
+`topcoat asset bundle --bin topcoat-shop --release`.
+
 ## Product photography
 
 Photos are content, not code: neither host keeps them in the binary or in

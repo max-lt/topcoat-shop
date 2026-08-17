@@ -157,8 +157,7 @@ async fn products(cx: &Cx) -> Result {
     }
 }
 
-#[path_param]
-struct Sku(str);
+path_param!(sku);
 
 #[page("/admin/produit/{sku}")]
 async fn product(cx: &Cx) -> Result {
@@ -458,7 +457,7 @@ async fn update_price(cx: &Cx, Form(f): Form<PriceUpdate>) -> Result<SeeOther> {
     if let Some(price_cents) = cents(&f.price) {
         db::set_price(pool(cx), &f.sku, price_cents).await?;
     }
-    Ok(see_other(&format!("/admin/produit/{}", f.sku)))
+    Ok(see_other(format!("/admin/produit/{}", f.sku)))
 }
 
 #[derive(serde::Deserialize)]
@@ -473,7 +472,7 @@ struct StockUpdate {
 async fn update_stock(cx: &Cx, Form(f): Form<StockUpdate>) -> Result<SeeOther> {
     current_admin(cx).await?.ok_or_not_found()?;
     db::set_stock(pool(cx), &f.sku, &f.size, f.stock).await?;
-    Ok(see_other(&format!("/admin/produit/{}", f.sku)))
+    Ok(see_other(format!("/admin/produit/{}", f.sku)))
 }
 
 #[derive(serde::Deserialize)]
@@ -503,7 +502,7 @@ async fn update_product(cx: &Cx, Form(f): Form<ProductUpdate>) -> Result<SeeOthe
         i64::from(f.is_new == "1"),
     )
     .await?;
-    Ok(see_other(&format!("/admin/produit/{}", f.sku)))
+    Ok(see_other(format!("/admin/produit/{}", f.sku)))
 }
 
 #[derive(serde::Deserialize)]
@@ -519,7 +518,7 @@ async fn add_variant(cx: &Cx, Form(f): Form<NewVariant>) -> Result<SeeOther> {
     if !f.size.trim().is_empty() {
         db::add_variant(pool(cx), &f.sku, &f.size, f.stock).await?;
     }
-    Ok(see_other(&format!("/admin/produit/{}", f.sku)))
+    Ok(see_other(format!("/admin/produit/{}", f.sku)))
 }
 
 #[derive(serde::Deserialize)]
@@ -533,7 +532,7 @@ struct VariantTarget {
 async fn remove_variant(cx: &Cx, Form(f): Form<VariantTarget>) -> Result<SeeOther> {
     current_admin(cx).await?.ok_or_not_found()?;
     db::remove_variant(pool(cx), &f.sku, &f.size).await?;
-    Ok(see_other(&format!("/admin/produit/{}", f.sku)))
+    Ok(see_other(format!("/admin/produit/{}", f.sku)))
 }
 
 #[component]
@@ -550,6 +549,10 @@ async fn photo_card(sku: String) -> Result {
         </p>
     }
 }
+
+/// A phone shot passes the router's 2 MiB default without trying, and
+/// would come back a 413.
+pub const PHOTO_LIMIT: usize = 16 * 1024 * 1024;
 
 /// The one multipart route of the shop: a photo comes in whatever the
 /// admin has on disk, and leaves under its SKU in whichever store the
@@ -573,7 +576,7 @@ async fn upload_photo(cx: &Cx, mut body: Multipart) -> Result<SeeOther> {
     if !file.is_empty() {
         crate::images::store(&sku, file).await?;
     }
-    Ok(see_other(&format!("/admin/produit/{sku}")))
+    Ok(see_other(format!("/admin/produit/{sku}")))
 }
 
 #[derive(serde::Deserialize)]
@@ -613,7 +616,7 @@ async fn create_product(cx: &Cx, Form(f): Form<NewProduct>) -> Result<SeeOther> 
         f.stock,
     )
     .await?;
-    Ok(see_other(&format!("/admin/produit/{sku}")))
+    Ok(see_other(format!("/admin/produit/{sku}")))
 }
 
 #[derive(serde::Deserialize)]

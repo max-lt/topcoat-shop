@@ -5,7 +5,8 @@
 
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, NotFoundError, SeeOther};
-use topcoat::router::{content::Form, layout, page, query_params, route, uri, StatusCode};
+use topcoat::router::request::uri;
+use topcoat::router::{content::Form, layout, page, query_params, route, StatusCode};
 use topcoat::view::{component, view};
 use topcoat::Result;
 
@@ -170,6 +171,10 @@ async fn head_assets() -> Result {
         <script type="module" src=(SCRIPT)></script>
     }
 }
+
+// A URL no route matches answers a bare 404 without it, outside the shell
+// the rest of the site wears.
+topcoat::router::not_found!("/");
 
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Result) -> Result {

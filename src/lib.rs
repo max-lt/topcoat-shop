@@ -26,7 +26,7 @@ pub mod images;
 mod worker_adapter {
     use http_body_util::BodyExt;
     use topcoat::cookie::RouterBuilderCookieExt;
-    use topcoat::router::{Body, Router, RouterBuilderDiscoverExt};
+    use topcoat::router::{BodyLimit, Body, Router, RouterBuilderDiscoverExt};
     use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
     use worker::{event, Context, Env, Error, Headers, Request, Response, Result};
 
@@ -56,6 +56,7 @@ mod worker_adapter {
             .discover()
             .cookies()
             .sessions(SessionConfig::default())
+            .layer(BodyLimit::max(crate::app::admin::PHOTO_LIMIT).at("/admin/photo"))
             .build();
         let response = router.handle(request).await;
 

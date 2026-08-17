@@ -88,8 +88,7 @@ async fn tracking(cx: &Cx, reference: String, version: f64) -> Result {
     }
 }
 
-#[path_param]
-struct Reference(str);
+path_param!(reference);
 
 #[page("/commande/{reference}")]
 async fn order_page(cx: &Cx) -> Result {
@@ -204,5 +203,5 @@ async fn cancel(cx: &Cx) -> Result<SeeOther> {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let reference = path_param::<Reference>(cx).to_string();
     db::cancel_order(pool(cx), user.id, &reference).await?;
-    Ok(see_other(&format!("/commande/{reference}")))
+    Ok(see_other(format!("/commande/{reference}")))
 }

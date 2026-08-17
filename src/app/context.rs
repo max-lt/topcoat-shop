@@ -4,7 +4,7 @@
 
 use topcoat::context::Cx;
 use topcoat::cookie::{cookie, cookies, Cookie, Cookies};
-use topcoat::router::headers;
+use topcoat::router::request::headers;
 use topcoat::session;
 use topcoat::Result;
 

@@ -2,7 +2,8 @@
 //! Hand-rolled XML -- three tags do not justify a dependency.
 
 use topcoat::context::Cx;
-use topcoat::router::{route, Body, IntoResponse, Response};
+use topcoat::router::response::{IntoResponse, Response};
+use topcoat::router::{route, Body};
 use topcoat::Result;
 
 use crate::app::context::{pool, public_origin};

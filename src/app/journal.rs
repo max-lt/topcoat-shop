@@ -83,8 +83,7 @@ async fn journal() -> Result {
     }
 }
 
-#[path_param]
-struct Slug(str);
+path_param!(slug);
 
 #[page("/journal/{slug}")]
 async fn post(cx: &Cx) -> Result {

@@ -398,5 +398,5 @@ async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<SeeOth
         return Ok(see_other("/panier?ajuste=1"));
     };
     forget_cart(cx);
-    Ok(see_other(&format!("/commande/{reference}")))
+    Ok(see_other(format!("/commande/{reference}")))
 }
