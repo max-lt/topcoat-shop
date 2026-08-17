@@ -1,9 +1,8 @@
-//! Images at the edge: the shell keeps the originals, the IMAGES
-//! binding does the resizing here. The worker pulls the full-size
-//! photo once, hands it to Cloudflare's kitchen, serves webp. When the
-//! binding is missing (or a transform fails) it falls back to plain
-//! proxying, so images never go dark. `url` and `background` keep their
-//! signatures so the views compile unchanged.
+//! Images at the edge: an R2 bucket holds the originals, Cloudflare's
+//! image binding does the resizing, and both are bindings of this Worker.
+//!
+//! `url`, `background` and `store` keep the signatures of the native
+//! kitchen, so the views and the back office compile against either.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,33 +14,42 @@ use topcoat::Result;
 use worker::js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
 use worker::wasm_bindgen::{JsCast, JsValue};
 
-pub const ORIGIN: &str = "https://shop.arq.pw";
-
-/// Same widths as the shell's kitchen; requests snap to the nearest so
-/// the set of unique transformations stays countable on one hand.
+/// Same widths as the native kitchen; requests snap to the nearest so the
+/// set of unique transformations stays countable on one hand.
 const WIDTHS: [u32; 3] = [400, 900, 1600];
 
-/// Anything heavier than the shell's jpeg at this quality would be a
+/// Anything heavier than the native jpeg at this quality would be a
 /// regression; 80 lands webp well under it.
 const WEBP_QUALITY: f64 = 80.0;
 
+/// An upload is stored at the largest served width, as the native shop
+/// stores it.
+const UPLOAD_QUALITY: f64 = 85.0;
+
 thread_local! {
     static KITCHEN: RefCell<Option<Rc<JsValue>>> = const { RefCell::new(None) };
+    static PHOTOS: RefCell<Option<Rc<worker::Bucket>>> = const { RefCell::new(None) };
 }
 
-/// Keeps the IMAGES binding at hand for the request. Absent binding is
-/// fine: the routes fall back to proxying the shell's kitchen.
+/// Keeps the bindings at hand for the request. Without IMAGES the
+/// originals still serve, just heavier; without the bucket there is
+/// nothing to serve and the photo route answers 404.
 pub fn install(env: &worker::Env) {
     let raw = Reflect::get(env.as_ref(), &JsValue::from_str("IMAGES")).ok();
     KITCHEN.with(|k| *k.borrow_mut() = raw.filter(|v| v.is_object()).map(Rc::new));
+    PHOTOS.with(|b| *b.borrow_mut() = env.bucket("PHOTOS").ok().map(Rc::new));
+}
+
+fn key_for(sku: &str) -> String {
+    format!("{}.jpg", sku.to_ascii_lowercase())
 }
 
 pub fn url(sku: &str, width: u32) -> String {
     format!("/img/{sku}?w={width}")
 }
 
-/// The shell computes real dominant colours; the edge falls back to the
-/// oat ground and lets the photos arrive.
+/// The native shop computes real dominant colours during its pre-warm; the
+/// edge has no decoder on board and lets the oat ground stand in.
 pub fn background(_key: &str) -> String {
     "#f5f1e8".to_string()
 }
@@ -60,12 +68,31 @@ impl IntoResponse for Payload {
     }
 }
 
-/// One pass through the binding: bytes in, webp of the asked width out.
-/// Pure JS interop -- worker 0.8 has no typed wrapper for IMAGES yet.
+/// The Send bridge, as in the data layer: R2 and the image binding hand
+/// back JS promises, which cannot cross threads, while topcoat's handlers
+/// must be Send. Wasm has exactly one thread, so the promise runs in a
+/// spawn_local task and the handler awaits a oneshot receiver.
+fn bridge<T, F>(work: F) -> impl std::future::Future<Output = Result<T>> + Send
+where
+    T: Send + 'static,
+    F: std::future::Future<Output = Result<T>> + 'static,
+{
+    let (tx, rx) = futures_channel::oneshot::channel();
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = tx.send(work.await);
+    });
+    async move { rx.await.map_err(|_| anyhow::anyhow!("bridge closed"))? }
+}
+
+/// One pass through the image binding: bytes in, the asked width out, in
+/// the asked format. Pure JS interop -- worker 0.8 has no typed wrapper
+/// for IMAGES yet.
 async fn cook(
     images: &JsValue,
     data: &[u8],
     width: u32,
+    format: &str,
+    quality: f64,
 ) -> std::result::Result<Vec<u8>, JsValue> {
     let call = |on: &JsValue, name: &str, arg: Option<&JsValue>| {
         let f: Function = Reflect::get(on, &name.into())?.dyn_into()?;
@@ -86,11 +113,11 @@ async fn cook(
     let size = Object::new();
     Reflect::set(&size, &"width".into(), &JsValue::from_f64(f64::from(width)))?;
     let transformed = call(&input, "transform", Some(&size.into()))?;
-    let format = Object::new();
-    Reflect::set(&format, &"format".into(), &"image/webp".into())?;
-    Reflect::set(&format, &"quality".into(), &JsValue::from_f64(WEBP_QUALITY))?;
+    let target = Object::new();
+    Reflect::set(&target, &"format".into(), &format.into())?;
+    Reflect::set(&target, &"quality".into(), &JsValue::from_f64(quality))?;
     let output = wasm_bindgen_futures::JsFuture::from(
-        call(&transformed, "output", Some(&format.into()))?.dyn_into::<Promise>()?,
+        call(&transformed, "output", Some(&target.into()))?.dyn_into::<Promise>()?,
     )
     .await?;
 
@@ -102,71 +129,67 @@ async fn cook(
     Ok(Uint8Array::new(&buffer).to_vec())
 }
 
-/// The bare JS-side fetch against the shell. Only callable from inside
-/// a spawn_local task; the bridges below wrap it for handlers.
-async fn fetch_origin(path: &str) -> Result<Option<Payload>> {
-    let mut response = worker::Fetch::Url(
-        format!("{ORIGIN}{path}")
-            .parse()
-            .map_err(|e| anyhow::anyhow!("url: {e}"))?,
-    )
-    .send()
-    .await
-    .map_err(|e| anyhow::anyhow!("origin: {e}"))?;
-    if response.status_code() != 200 {
+/// The original as stored. Only callable from inside a spawn_local task.
+async fn original(sku: &str) -> Result<Option<Vec<u8>>> {
+    let Some(bucket) = PHOTOS.with(|b| b.borrow().clone()) else {
         return Ok(None);
-    }
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "application/octet-stream".to_string());
-    let data = response.bytes().await.map_err(|e| anyhow::anyhow!("bytes: {e}"))?;
-    Ok(Some(Payload { data, content_type }))
+    };
+    let object =
+        bucket.get(key_for(sku)).execute().await.map_err(|e| anyhow::anyhow!("r2 get: {e}"))?;
+    // The body borrows the object, so the object has to outlive the read.
+    let Some(found) = object else {
+        return Ok(None);
+    };
+    let Some(body) = found.body() else {
+        return Ok(None);
+    };
+    Ok(Some(body.bytes().await.map_err(|e| anyhow::anyhow!("r2 body: {e}"))?))
 }
 
-/// Same Send bridge as the data layer: the JS fetch runs in a
-/// spawn_local task, the handler awaits plain bytes.
-fn proxied(path: String) -> impl std::future::Future<Output = Result<Option<Payload>>> + Send {
-    let (tx, rx) = futures_channel::oneshot::channel();
-    wasm_bindgen_futures::spawn_local(async move {
-        let _ = tx.send(fetch_origin(&path).await);
-    });
-    async move { rx.await.map_err(|_| anyhow::anyhow!("bridge closed"))? }
-}
-
-/// Fetches the full-size photo from the shell and cooks it here when
-/// the binding is on board; otherwise the shell's kitchen serves, as
-/// before. Same Send bridge as everything JS-side.
-fn cooked_photo(
+/// Pulls the original out of the bucket and serves it at the asked width.
+/// A failed transform still has the original in hand: a photo does not go
+/// dark for want of a resize.
+fn served(
     sku: String,
     width: u32,
 ) -> impl std::future::Future<Output = Result<Option<Payload>>> + Send {
-    let (tx, rx) = futures_channel::oneshot::channel();
-    wasm_bindgen_futures::spawn_local(async move {
+    bridge(async move {
+        let Some(data) = original(&sku).await? else {
+            return Ok(None);
+        };
+        let jpeg = |data: Vec<u8>| Payload { data, content_type: "image/jpeg".to_string() };
+
         let kitchen = KITCHEN.with(|k| k.borrow().clone());
-        let result: Result<Option<Payload>> = async {
-            // No binding, or the largest width asked: plain proxy.
-            let Some(images) = kitchen.filter(|_| width < WIDTHS[2]) else {
-                return fetch_origin(&format!("/img/{sku}?w={width}")).await;
-            };
-            let Some(original) = fetch_origin(&format!("/img/{sku}?w={}", WIDTHS[2])).await?
-            else {
-                return Ok(None);
-            };
-            match cook(&images, &original.data, width).await {
-                Ok(data) => {
-                    Ok(Some(Payload { data, content_type: "image/webp".to_string() }))
-                }
-                // A failed transform still has the original in hand.
-                Err(_) => Ok(Some(original)),
+        let Some(images) = kitchen.filter(|_| width < WIDTHS[2]) else {
+            return Ok(Some(jpeg(data)));
+        };
+        match cook(&images, &data, width, "image/webp", WEBP_QUALITY).await {
+            Ok(cooked) => {
+                Ok(Some(Payload { data: cooked, content_type: "image/webp".to_string() }))
             }
+            Err(_) => Ok(Some(jpeg(data))),
         }
-        .await;
-        let _ = tx.send(result);
-    });
-    async move { rx.await.map_err(|_| anyhow::anyhow!("bridge closed"))? }
+    })
+}
+
+/// Takes an upload into the bucket, bounded to the largest served width.
+pub fn store(sku: &str, raw: Vec<u8>) -> impl std::future::Future<Output = Result<()>> + Send {
+    let key = key_for(sku);
+    bridge(async move {
+        // No decoder on board: the binding is what bounds an upload here.
+        let kitchen = KITCHEN.with(|k| k.borrow().clone());
+        let bytes = match kitchen {
+            Some(images) => cook(&images, &raw, WIDTHS[2], "image/jpeg", UPLOAD_QUALITY)
+                .await
+                .unwrap_or(raw),
+            None => raw,
+        };
+        let bucket = PHOTOS
+            .with(|b| b.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("no PHOTOS bucket bound"))?;
+        bucket.put(key, bytes).execute().await.map_err(|e| anyhow::anyhow!("r2 put: {e}"))?;
+        Ok(())
+    })
 }
 
 #[path_param]
@@ -182,20 +205,5 @@ async fn photo(cx: &Cx) -> Result<Payload> {
         })
         .unwrap_or(900);
     let width = WIDTHS.into_iter().min_by_key(|w| w.abs_diff(requested)).unwrap();
-    Ok(cooked_photo(sku, width).await?.ok_or_not_found()?)
-}
-
-#[path_param]
-struct File(str);
-
-#[route(GET "/_topcoat/assets/{file}")]
-async fn asset(cx: &Cx) -> Result<Payload> {
-    let file = path_param::<File>(cx).to_string();
-    Ok(proxied(format!("/_topcoat/assets/{file}")).await?.ok_or_not_found()?)
-}
-
-#[route(GET "/_topcoat/fonts/{file}")]
-async fn font(cx: &Cx) -> Result<Payload> {
-    let file = path_param::<File>(cx).to_string();
-    Ok(proxied(format!("/_topcoat/fonts/{file}")).await?.ok_or_not_found()?)
+    Ok(served(sku, width).await?.ok_or_not_found()?)
 }

@@ -7,10 +7,19 @@ command = "worker-build --release --no-default-features --features edge"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "bernard"
-database_id = "2d0c8ca9-0dc8-4f49-a860-896adf731a5e"
+database_name = "bernard-en"
+database_id = "4e7473e4-baea-4aa3-8d8c-f5b418ab5d1b"
 
-# Cloudflare's image kitchen: resize + webp at the edge, no wasm codec on
-# board. See src/images/edge.rs -- absent binding degrades to proxying.
+# One object per SKU, as PHOTOS_DIR holds one file per SKU.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "bernard-photos"
+
+# Resize and webp at the edge: no image codec compiles into the wasm.
 [images]
 binding = "IMAGES"
+
+# Written by `cargo run --bin static-bundle`. A request matching a file
+# here never reaches the Worker.
+[assets]
+directory = "public"

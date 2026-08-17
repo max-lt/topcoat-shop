@@ -4,7 +4,6 @@
 
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
-#[cfg(feature = "native")]
 use topcoat::router::content::multipart::Multipart;
 use topcoat::router::{content::Form, page, path_param, route};
 use topcoat::view::{component, view};
@@ -537,7 +536,6 @@ async fn remove_variant(cx: &Cx, Form(f): Form<VariantTarget>) -> Result<SeeOthe
     Ok(see_other(&format!("/admin/produit/{}", f.sku)))
 }
 
-#[cfg(feature = "native")]
 #[component]
 async fn photo_card(sku: String) -> Result {
     view! {
@@ -553,23 +551,9 @@ async fn photo_card(sku: String) -> Result {
     }
 }
 
-/// The edge proxies photos, it does not cook or store them.
-#[cfg(feature = "edge")]
-#[component]
-async fn photo_card(sku: String) -> Result {
-    let _ = sku;
-    view! {
-        <p class=("mt-3 text-sm ".to_string() + MUTED)>
-            "Le téléversement se fait depuis la boutique native — le bord \
-             proxie les photos, il ne les cuisine pas."
-        </p>
-    }
-}
-
 /// The one multipart route of the shop: a photo comes in whatever the
-/// admin has on disk, and leaves as a normalised JPEG in the base and in
-/// the same caches the embedded originals live in.
-#[cfg(feature = "native")]
+/// admin has on disk, and leaves under its SKU in whichever store the
+/// host keeps -- a directory natively, a bucket at the edge.
 #[route(POST "/admin/photo")]
 async fn upload_photo(cx: &Cx, mut body: Multipart) -> Result<SeeOther> {
     current_admin(cx).await?.ok_or_not_found()?;
@@ -587,10 +571,7 @@ async fn upload_photo(cx: &Cx, mut body: Multipart) -> Result<SeeOther> {
     db::product(pool(cx), &sku).await?.ok_or_not_found()?;
 
     if !file.is_empty() {
-        let bytes = tokio::task::spawn_blocking(move || crate::images::normalize(&file)).await??;
-        db::put_photo(pool(cx), &sku, &bytes).await?;
-        let cache_sku = sku.clone();
-        tokio::task::spawn_blocking(move || crate::images::adopt(cache_sku, bytes)).await?;
+        crate::images::store(&sku, file).await?;
     }
     Ok(see_other(&format!("/admin/produit/{sku}")))
 }

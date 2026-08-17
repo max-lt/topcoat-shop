@@ -22,6 +22,7 @@ native = [
     "topcoat/multipart",
 ]
 edge = [
+    "topcoat/multipart",
     "dep:worker",
     "dep:http",
     "dep:http-body-util",
@@ -36,6 +37,10 @@ crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "topcoat-shop"
+required-features = ["native"]
+
+[[bin]]
+name = "static-bundle"
 required-features = ["native"]
 
 [dependencies]

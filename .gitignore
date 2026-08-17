@@ -8,6 +8,13 @@ node_modules/
 # Local SQLite bases.
 boutique.db*
 bernard.db
+shop.db*
+live.db*
+# D1 dumps and the script that folds them into the English schema.
+local/
 
-# Catalog photography: sourced per install, never committed. See README.
-assets/photos/
+# Catalog photography: content, sourced per install, never committed. The
+# native shop reads and writes this directory; the edge reads R2.
+photos/
+# The static tree static-bundle renders for the edge deployment.
+public/

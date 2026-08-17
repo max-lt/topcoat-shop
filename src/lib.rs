@@ -7,6 +7,8 @@
 pub mod app;
 pub mod db;
 
+pub mod bundle;
+
 #[cfg(feature = "native")]
 pub mod design;
 

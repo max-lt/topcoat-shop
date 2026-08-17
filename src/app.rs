@@ -156,16 +156,18 @@ async fn head_assets() -> Result {
     }
 }
 
-/// Assets proxied from the native shop: same files, same hashed names,
-/// served through the worker to stay same-origin.
+/// The same files under the fixed names of `crate::bundle`. Fontsource
+/// and the Tailwind CLI pull in `ring`, which does not build for wasm, so
+/// the edge cannot call the macros that name them.
 #[cfg(feature = "edge")]
 #[component]
 async fn head_assets() -> Result {
+    use crate::bundle::{SANS_CSS, SCRIPT, SERIF_CSS, STYLESHEET};
     view! {
-        <link rel="stylesheet" href="/_topcoat/fonts/Instrument-Serif-b7fdaa0a5e0e2cce.css">
-        <link rel="stylesheet" href="/_topcoat/fonts/Instrument-Sans-b98466e4c197e009.css">
-        <link rel="stylesheet" href="/_topcoat/assets/tailwind-22640cef71758ef5.css">
-        <script type="module" src="/_topcoat/assets/topcoat-f897074dd8132591.js"></script>
+        <link rel="stylesheet" href=(SERIF_CSS)>
+        <link rel="stylesheet" href=(SANS_CSS)>
+        <link rel="stylesheet" href=(STYLESHEET)>
+        <script type="module" src=(SCRIPT)></script>
     }
 }
 

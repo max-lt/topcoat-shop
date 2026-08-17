@@ -14,7 +14,7 @@ async fn main() {
         .await
         .expect("database");
 
-    images::prewarm(pool.clone());
+    images::prewarm();
 
     let router = Router::builder()
         .discover()

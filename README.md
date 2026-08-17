@@ -24,17 +24,30 @@ promoted by hand: `update users set admin = 1 where email = '...'`.
 
 ## Product photography
 
-`assets/photos/` is not in the repository. Drop 1600 px JPEGs named after
-lowercase SKUs (`coq-mug.jpg`) and build.rs compiles them in; without them
-the shop serves flat placeholder cards and everything else works. Photos
-uploaded through the back office are stored in the database and override
-the compiled-in ones.
+Photos are content, not code: neither host keeps them in the binary or in
+the base.
+
+The native shop reads and writes `PHOTOS_DIR` (default `photos/`), one
+1600 px JPEG per SKU in lowercase (`coq-mug.jpg`). The back office writes
+into the same directory. With an empty directory the shop serves flat
+placeholder cards and everything else works.
+
+The Worker reads the `PHOTOS` R2 bucket, same naming, and writes back to
+it on upload.
 
 ## Running at the edge
 
 ```sh
-npx wrangler d1 execute DB --local --file migrations/0001_schema.sql   # then 0002, 0003
+for f in migrations/*.sql; do npx wrangler d1 execute DB --local --file "$f"; done
+for p in photos/*.jpg; do
+    npx wrangler r2 object put "bernard-photos/$(basename "$p")" --file "$p" --local
+done
+cargo run --bin static-bundle   # writes public/: stylesheet, runtime, fonts
 npx wrangler dev
 ```
+
+`static-bundle` renders those files out of the shop's own router, in
+process. Workers Assets serves them; the Worker fetches nothing from
+anywhere.
 
 See docs/DEPLOYMENT.md for the production checklist.

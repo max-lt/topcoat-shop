@@ -796,25 +796,6 @@ pub async fn set_stock(
     Ok(())
 }
 
-// --- photos
-
-pub async fn put_photo(pool: &SqlitePool, sku: &str, bytes: &[u8]) -> Result<(), Error> {
-    sqlx::query(
-        "insert into photos (sku, bytes, created_at) values (?1, ?2, ?3) \
-         on conflict(sku) do update set bytes = ?2, created_at = ?3",
-    )
-    .bind(sku)
-    .bind(bytes)
-    .bind(Utc::now().to_rfc3339())
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-pub async fn all_photos(pool: &SqlitePool) -> Result<Vec<(String, Vec<u8>)>, Error> {
-    Ok(sqlx::query_as("select sku, bytes from photos").fetch_all(pool).await?)
-}
-
 // --- admin: products
 
 /// Every product, hidden ones included: the back office has no curtain.
