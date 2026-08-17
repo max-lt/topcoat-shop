@@ -1,6 +1,7 @@
 //! The data layer: pool, migrations, and every query the shop runs. Queries
 //! live here rather than in the pages so the SQL can be read in one place.
 
+use chrono::Utc;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{AssertSqlSafe, FromRow, SqlitePool};
 
@@ -39,8 +40,46 @@ pub struct Variant {
     pub stock: i64,
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub struct CartLine {
+    pub sku: String,
+    pub name: String,
+    pub size: String,
+    pub price_cents: i64,
+    pub quantity: i64,
+    pub stock: i64,
+}
+
+impl CartLine {
+    pub fn subtotal(&self) -> i64 {
+        self.price_cents * self.quantity
+    }
+}
+
 /// Free shipping above this; the threshold is quoted in the header banner.
 pub const FREE_SHIPPING_CENTS: i64 = 5_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShippingMode {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub delay: &'static str,
+    pub cents: i64,
+}
+
+pub const SHIPPING_MODES: [ShippingMode; 2] = [
+    ShippingMode { key: "standard", name: "Standard", delay: "3 à 5 jours ouvrés", cents: 490 },
+    ShippingMode { key: "express", name: "Express", delay: "24 à 48 heures", cents: 1_190 },
+];
+
+pub fn shipping_mode(key: &str) -> ShippingMode {
+    SHIPPING_MODES.iter().copied().find(|m| m.key == key).unwrap_or(SHIPPING_MODES[0])
+}
+
+/// Shipping is free once the basket passes the threshold.
+pub fn shipping_cents(subtotal: i64, key: &str) -> i64 {
+    if subtotal >= FREE_SHIPPING_CENTS { 0 } else { shipping_mode(key).cents }
+}
 
 /// Prices are integers everywhere; this is the only place they become text.
 pub fn format_price(cents: i64) -> String {
@@ -146,4 +185,126 @@ pub async fn variants(pool: &SqlitePool, sku: &str) -> Result<Vec<Variant>, Erro
     .bind(sku)
     .fetch_all(pool)
     .await?)
+}
+
+async fn variant_stock(pool: &SqlitePool, sku: &str, size: &str) -> Result<i64, Error> {
+    Ok(sqlx::query_scalar("select stock from variants where sku = ?1 and size = ?2")
+        .bind(sku)
+        .bind(size)
+        .fetch_optional(pool)
+        .await?
+        .unwrap_or(0))
+}
+
+// --- cart
+
+pub async fn create_cart(pool: &SqlitePool, id: &str) -> Result<(), Error> {
+    sqlx::query("insert or ignore into carts (id, created_at) values (?1, ?2)")
+        .bind(id)
+        .bind(Utc::now().to_rfc3339())
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn cart_lines(pool: &SqlitePool, cart_id: &str) -> Result<Vec<CartLine>, Error> {
+    Ok(sqlx::query_as::<_, CartLine>(
+        "select p.sku, p.name, l.size, p.price_cents, l.quantity, \
+                coalesce(v.stock, p.stock) as stock \
+         from cart_lines l \
+         join products p on p.sku = l.sku \
+         left join variants v on v.sku = l.sku and v.size = l.size \
+         where l.cart_id = ?1 order by p.name, l.size",
+    )
+    .bind(cart_id)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn add_to_cart(
+    pool: &SqlitePool,
+    cart_id: &str,
+    sku: &str,
+    size: &str,
+    quantity: i64,
+) -> Result<i64, Error> {
+    create_cart(pool, cart_id).await?;
+    let stock = variant_stock(pool, sku, size).await?;
+    if stock == 0 {
+        return item_count(pool, cart_id).await;
+    }
+
+    sqlx::query(
+        "insert into cart_lines (cart_id, sku, size, quantity) values (?1, ?2, ?3, ?4) \
+         on conflict(cart_id, sku, size) do update set quantity = min(quantity + ?4, ?5)",
+    )
+    .bind(cart_id)
+    .bind(sku)
+    .bind(size)
+    .bind(quantity.clamp(1, stock))
+    .bind(stock)
+    .execute(pool)
+    .await?;
+
+    item_count(pool, cart_id).await
+}
+
+/// Sets a line's quantity and reports what was actually stored. An upsert,
+/// not an update: raising the quantity of a line that was removed puts it
+/// back, instead of quietly matching no row. Returns 0 when the line is
+/// gone, and clamps to the stock on hand.
+pub async fn set_quantity(
+    pool: &SqlitePool,
+    cart_id: &str,
+    sku: &str,
+    size: &str,
+    quantity: i64,
+) -> Result<i64, Error> {
+    if quantity <= 0 {
+        remove_from_cart(pool, cart_id, sku, size).await?;
+        return Ok(0);
+    }
+    let stock = variant_stock(pool, sku, size).await?;
+    if stock == 0 {
+        remove_from_cart(pool, cart_id, sku, size).await?;
+        return Ok(0);
+    }
+
+    create_cart(pool, cart_id).await?;
+    let kept = quantity.min(stock);
+    sqlx::query(
+        "insert into cart_lines (cart_id, sku, size, quantity) values (?1, ?2, ?3, ?4) \
+         on conflict(cart_id, sku, size) do update set quantity = ?4",
+    )
+    .bind(cart_id)
+    .bind(sku)
+    .bind(size)
+    .bind(kept)
+    .execute(pool)
+    .await?;
+    Ok(kept)
+}
+
+pub async fn remove_from_cart(
+    pool: &SqlitePool,
+    cart_id: &str,
+    sku: &str,
+    size: &str,
+) -> Result<(), Error> {
+    sqlx::query("delete from cart_lines where cart_id = ?1 and sku = ?2 and size = ?3")
+        .bind(cart_id)
+        .bind(sku)
+        .bind(size)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn item_count(pool: &SqlitePool, cart_id: &str) -> Result<i64, Error> {
+    Ok(
+        sqlx::query_scalar("select coalesce(sum(quantity), 0) from cart_lines where cart_id = ?1")
+            .bind(cart_id)
+            .fetch_one(pool)
+            .await?,
+    )
 }

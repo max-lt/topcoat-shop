@@ -5,12 +5,12 @@
 use topcoat::context::Cx;
 use topcoat::router::error::RouterErrorExt;
 use topcoat::router::{page, path_param, query_params};
-use topcoat::runtime::{shard, Event};
+use topcoat::runtime::{procedure, shard, Event};
 use topcoat::view::view;
 use topcoat::Result;
 
-use crate::app::context::pool;
-use crate::app::{page_heading, product_tile, BTN_OUTLINE, EYEBROW, FIELD, MUTED, SOFT};
+use crate::app::context::{current_cart, pool};
+use crate::app::{page_heading, product_tile, BTN, BTN_OUTLINE, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 const SORTS: [(i64, &str); 4] = [
@@ -214,6 +214,16 @@ async fn search(cx: &Cx) -> Result {
 
 // --- product page
 
+/// Adds one line and hands back the cart's new size; the button reads it to
+/// confirm without a page reload.
+#[procedure]
+async fn add(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
+    let cart = current_cart(cx);
+    let total =
+        db::add_to_cart(pool(cx), &cart, &sku, &size, quantity.max(1.0) as i64).await?;
+    Ok(total as f64)
+}
+
 #[path_param]
 struct Sku(str);
 
@@ -225,12 +235,20 @@ async fn product(cx: &Cx) -> Result {
     let p = db::product(pool(cx), &sku).await?.filter(|p| p.hidden == 0).ok_or_not_found()?;
     let variants = db::variants(pool(cx), &sku).await?;
     let related = db::related_products(pool(cx), &sku, &p.category).await?;
-
     let has_sizes = variants.iter().any(|v| !v.size.is_empty());
     let sold_out = p.sold_out();
     let low = p.low_stock();
+    let page_sku = p.sku.clone();
+    // Preselect the first size actually in stock.
+    let first_size =
+        variants.iter().find(|v| v.stock > 0).map(|v| v.size.clone()).unwrap_or_default();
 
     view! {
+        signal sku_sig = page_sku;
+        signal size = first_size;
+        signal quantity = 1.0;
+        signal added = 0.0;
+
         <nav class=("text-sm ".to_string() + MUTED)>
             <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
             " / "
@@ -292,15 +310,41 @@ async fn product(cx: &Cx) -> Result {
                             </div>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 for v in variants.iter().filter(|v| !v.size.is_empty()) {
+                                    // A signal per option: a handler can capture a
+                                    // signal, never a loop variable.
+                                    signal label = v.size.clone();
+
                                     if v.stock > 0 {
-                                        <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm ring-1 ring-oat-300">(&v.size)</span>
+                                        <button
+                                            :class=$(if size.get() == label.get() {
+                                                "min-w-14 rounded-xl bg-oat-900 px-4 py-2.5 text-sm text-oat-50"
+                                            } else {
+                                                "min-w-14 rounded-xl px-4 py-2.5 text-sm ring-1 ring-oat-300 transition hover:ring-oat-900"
+                                            })
+                                            @click=$(|_e| size.set(label.get()))>(&v.size)</button>
                                     } else {
                                         <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
                                     }
                                 }
                             </div>
+
                         </div>
                     }
+
+                    <div class="mt-8 flex flex-wrap items-center gap-4">
+                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300">
+                            <button aria-label="Diminuer la quantité" class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
+                                    @click=$(|_e| quantity.set(if quantity.get() > 1.0 { quantity.get() - 1.0 } else { 1.0 }))>"−"</button>
+                            <span class="w-9 text-center tabular-nums">$(quantity.get())</span>
+                            <button aria-label="Augmenter la quantité" class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
+                                    @click=$(|_e| quantity.increment())>"+"</button>
+                        </div>
+                        <button class=(BTN.to_string() + " h-11 px-8")
+                                @click=$(async |_e| {
+                                    let n = add(sku_sig.get(), size.get(), quantity.get()).await;
+                                    added.set(n);
+                                })>"Ajouter au panier"</button>
+                    </div>
 
                     if low {
                         <p class="mt-4 text-sm text-brique-700">
@@ -308,6 +352,13 @@ async fn product(cx: &Cx) -> Result {
                         </p>
                     }
 
+                    // display:none suspends CSS animations, so the pill plays
+                    // its entrance the moment the first add reveals it.
+                    <p class="animate-apparition mt-5 inline-flex items-center gap-2 rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50"
+                       :hidden=$(added.get() == 0.0)>
+                        "✓ Ajouté — " $(added.get()) " article(s) au panier."
+                        <a href="/panier" class="font-medium underline underline-offset-4">"Voir le panier"</a>
+                    </p>
                 }
 
                 <ul class=("mt-10 space-y-2 text-sm ".to_string() + MUTED)>

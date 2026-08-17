@@ -14,12 +14,13 @@ use topcoat::Result;
 use crate::db::{self, format_price, Product};
 use crate::design::{SANS, SERIF};
 
+pub mod cart;
 pub mod context;
 pub mod house;
 pub mod journal;
 pub mod shop;
 
-use context::pool;
+use context::{cart_count, pool};
 
 // --- tokens
 
@@ -143,6 +144,7 @@ async fn page_title(cx: &Cx) -> Result<String> {
 
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Result) -> Result {
+    let items = cart_count(cx).await?;
     let title = page_title(cx).await?;
 
     let content = match slot {
@@ -235,7 +237,12 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
 
                         <div class="ml-auto flex items-center gap-4 lg:ml-0">
                             <a href="/compte" class="text-sm transition hover:text-gin-700">"Connexion"</a>
-                            <a href="/panier" class="inline-flex items-center gap-2 rounded-full bg-oat-900 px-4 py-2 text-sm text-oat-50 transition hover:bg-gin-800">"Panier"</a>
+                            <a href="/panier" class="inline-flex items-center gap-2 rounded-full bg-oat-900 px-4 py-2 text-sm text-oat-50 transition hover:bg-gin-800">
+                                "Panier"
+                                if items > 0 {
+                                    <span class="inline-flex h-5 items-center justify-center rounded-full bg-oat-50 px-1.5 text-xs font-medium tabular-nums text-oat-900">(items)</span>
+                                }
+                            </a>
                         </div>
                     </div>
                 </header>
