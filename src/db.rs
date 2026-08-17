@@ -48,6 +48,7 @@ pub struct User {
     pub id: i64,
     pub email: String,
     pub name: String,
+    pub admin: i64,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -259,7 +260,7 @@ pub async fn register(
     .fetch_one(pool)
     .await?;
 
-    Ok(User { id, email: email.trim().to_lowercase(), name: name.trim().to_string() })
+    Ok(User { id, email: email.trim().to_lowercase(), name: name.trim().to_string(), admin: 0 })
 }
 
 pub async fn verify_credentials(
@@ -267,21 +268,21 @@ pub async fn verify_credentials(
     email: &str,
     password: &str,
 ) -> Result<Option<User>, Error> {
-    let row: Option<(i64, String, String, String)> = sqlx::query_as(
-        "select id, email, name, password_hash from users where email = ?1",
+    let row: Option<(i64, String, String, String, i64)> = sqlx::query_as(
+        "select id, email, name, password_hash, admin from users where email = ?1",
     )
     .bind(email.trim().to_lowercase())
     .fetch_optional(pool)
     .await?;
 
-    let Some((id, email, name, hash)) = row else {
+    let Some((id, email, name, hash, admin)) = row else {
         return Ok(None);
     };
     let expected = PasswordHash::new(&hash).map_err(|e| anyhow::anyhow!("hash: {e}"))?;
     if Argon2::default().verify_password(password.as_bytes(), &expected).is_err() {
         return Ok(None);
     }
-    Ok(Some(User { id, email, name }))
+    Ok(Some(User { id, email, name, admin }))
 }
 
 pub async fn email_taken(pool: &SqlitePool, email: &str) -> Result<bool, Error> {
@@ -319,7 +320,7 @@ pub async fn user_for_session(
     token_hash: &[u8],
 ) -> Result<Option<User>, Error> {
     Ok(sqlx::query_as::<_, User>(
-        "select u.id, u.email, u.name from sessions s \
+        "select u.id, u.email, u.name, u.admin from sessions s \
          join users u on u.id = s.user_id \
          where s.token_hash = ?1 and s.expires_at > ?2",
     )
@@ -866,4 +867,83 @@ fn order_reference() -> String {
     let suffix: String =
         raw.iter().map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char).collect();
     format!("BER-{suffix}")
+}
+
+// --- admin
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AdminOrder {
+    pub reference: String,
+    pub status: String,
+    pub total_cents: i64,
+    pub created_at: String,
+    pub customer: String,
+    pub email: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AdminCustomer {
+    pub name: String,
+    pub email: String,
+    pub admin: i64,
+    pub orders: i64,
+    pub total_cents: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AdminStats {
+    pub products: i64,
+    pub orders: i64,
+    pub customers: i64,
+    pub subscribers: i64,
+    pub alerts: i64,
+    pub revenue_cents: i64,
+}
+
+pub async fn admin_stats(pool: &SqlitePool) -> Result<AdminStats, Error> {
+    let one = |sql: &'static str| sqlx::query_scalar::<_, i64>(sql).fetch_one(pool);
+    Ok(AdminStats {
+        products: one("select count(*) from products").await?,
+        orders: one("select count(*) from orders").await?,
+        customers: one("select count(*) from users").await?,
+        subscribers: one("select count(*) from subscribers").await?,
+        alerts: one("select count(*) from stock_alerts").await?,
+        revenue_cents: one(
+            "select coalesce(sum(total_cents), 0) from orders where status != 'cancelled'",
+        )
+        .await?,
+    })
+}
+
+pub async fn admin_orders(pool: &SqlitePool) -> Result<Vec<AdminOrder>, Error> {
+    Ok(sqlx::query_as::<_, AdminOrder>(
+        "select o.reference, o.status, o.total_cents, o.created_at, \
+                u.name as customer, u.email \
+         from orders o join users u on u.id = o.user_id \
+         order by o.created_at desc",
+    )
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn admin_customers(pool: &SqlitePool) -> Result<Vec<AdminCustomer>, Error> {
+    Ok(sqlx::query_as::<_, AdminCustomer>(
+        "select u.name, u.email, u.admin, \
+                count(o.id) as orders, \
+                coalesce(sum(case when o.status != 'cancelled' then o.total_cents end), 0) \
+                    as total_cents \
+         from users u left join orders o on o.user_id = u.id \
+         group by u.id order by u.created_at",
+    )
+    .fetch_all(pool)
+    .await?)
+}
+
+/// Every product, hidden ones included: the back office has no curtain.
+pub async fn all_products(pool: &SqlitePool) -> Result<Vec<Product>, Error> {
+    Ok(sqlx::query_as::<_, Product>(AssertSqlSafe(format!(
+        "select {PRODUCT_FIELDS} from products order by hidden, category, name"
+    )))
+    .fetch_all(pool)
+    .await?)
 }

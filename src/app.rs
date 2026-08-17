@@ -15,6 +15,7 @@ use crate::db::{self, format_price, Product};
 use crate::design::{SANS, SERIF};
 
 pub mod account;
+pub mod admin;
 pub mod cart;
 pub mod context;
 pub mod house;
@@ -147,7 +148,9 @@ async fn page_title(cx: &Cx) -> Result<String> {
 
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Result) -> Result {
-    let signed_in = current_user(cx).await?.is_some();
+    let visitor = current_user(cx).await?;
+    let signed_in = visitor.is_some();
+    let is_admin = visitor.as_ref().is_some_and(|u| u.admin != 0);
     let items = cart_count(cx).await?;
     let title = page_title(cx).await?;
 
@@ -316,6 +319,10 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                                     <li><a href="/journal" class="transition hover:text-gin-700">"Journal"</a></li>
                                     <li><a href="/cgv" class="transition hover:text-gin-700">"Conditions de vente"</a></li>
                                     <li><a href="/mentions-legales" class="transition hover:text-gin-700">"Mentions légales"</a></li>
+                                    // Only the people who run the shop see the door.
+                                    if is_admin {
+                                        <li><a href="/admin" class="text-gin-700 transition hover:text-gin-800">"Administration"</a></li>
+                                    }
                                 </ul>
                             </div>
                         </div>

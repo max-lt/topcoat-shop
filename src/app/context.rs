@@ -26,6 +26,13 @@ pub async fn current_user(cx: &Cx) -> Result<Option<User>> {
     Ok(db::user_for_session(pool(cx), hash.as_ref()).await?)
 }
 
+/// The signed-in user, only if the base says they run the shop. Pages
+/// behind this answer 404 to everyone else: the door does not advertise
+/// itself.
+pub async fn current_admin(cx: &Cx) -> Result<Option<User>> {
+    Ok(current_user(cx).await?.filter(|u| u.admin != 0))
+}
+
 /// The visitor's cart id, minted into a cookie on first sight so an
 /// anonymous browser can fill a cart before it has an account.
 pub fn current_cart(cx: &Cx) -> String {
