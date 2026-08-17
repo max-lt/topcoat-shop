@@ -35,10 +35,23 @@ pub async fn status_badge(status: String) -> Result {
     }
 }
 
+/// The ladder as a rung number: paid, packing, shipped, delivered, and
+/// cancelled off the end. The buttons compare rungs rather than parse
+/// words.
+fn rung(status: &str) -> f64 {
+    match status {
+        "paid" => 0.0,
+        "packing" => 1.0,
+        "shipped" => 2.0,
+        "delivered" => 3.0,
+        _ => 4.0,
+    }
+}
+
 #[procedure]
-async fn advance(cx: &Cx, reference: String) -> Result<String> {
+async fn advance(cx: &Cx, reference: String) -> Result<f64> {
     let user = current_user(cx).await?.ok_or_unauthorized()?;
-    Ok(db::advance_order(pool(cx), user.id, &reference).await?)
+    Ok(rung(&db::advance_order(pool(cx), user.id, &reference).await?))
 }
 
 #[shard]
@@ -98,11 +111,11 @@ async fn order_page(cx: &Cx) -> Result {
         db::order(pool(cx), user.id, &reference).await?.ok_or_not_found()?;
 
     let page_reference = order.reference.clone();
-    let delivered = order.status == "delivered";
+    let at = rung(&order.status);
     // A shipped parcel still has a step to walk, though it can no longer
     // be cancelled.
-    let can_advance = matches!(order.status.as_str(), "paid" | "packing" | "shipped");
-    let cancellable = order.status == "paid" || order.status == "packing";
+    let can_advance = at < 3.0;
+    let cancellable = at < 2.0;
     let mode = db::shipping_mode(&order.shipping);
     let subtotal = order.total_cents - order.shipping_cents;
     let free = order.shipping_cents == 0;
@@ -110,7 +123,7 @@ async fn order_page(cx: &Cx) -> Result {
     view! {
         signal reference_sig = page_reference;
         signal version = 0.0;
-        signal done = delivered;
+        signal step = at;
 
         <div class="relative overflow-hidden rounded-3xl bg-gin-900 px-8 py-16 text-center text-gin-50">
             // The couriers on the march, blurred behind a green veil: the
@@ -138,16 +151,18 @@ async fn order_page(cx: &Cx) -> Result {
 
                 if can_advance {
                 <button class=(BTN_OUTLINE.to_string() + " mt-8")
-                        :hidden=$(done.get())
+                        :hidden=$(step.get() >= 3.0)
                         @click=$(async |_e| {
-                            let status = advance(reference_sig.get()).await;
-                            done.set(status == "delivered");
+                            step.set(advance(reference_sig.get()).await);
                             version.increment();
                         })>"Faire avancer le colis"</button>
                 }
 
                 if cancellable {
-                    <form method="post" action=(format!("/commande/{}/annuler", order.reference)) class="mt-4">
+                    // Cancelling stops at packing: once the parcel moves, the
+                    // form goes with it.
+                    <form method="post" action=(format!("/commande/{}/annuler", order.reference)) class="mt-4"
+                          :hidden=$(step.get() >= 2.0)>
                         <button class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)>
                             "Annuler la commande"
                         </button>
