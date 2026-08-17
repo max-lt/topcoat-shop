@@ -341,7 +341,11 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                                    @input=$(|e: Event| term.set(e.target.value))>
                             <button aria-label="Chercher"
                                     class="absolute inset-y-0 right-1 my-auto flex h-8 w-8 items-center justify-center rounded-full text-oat-600 transition hover:bg-oat-100 hover:text-gin-700">"→"</button>
-                            <div class="absolute right-0 top-full z-50 mt-2 w-80" :hidden=$(open.get() == 0.0)>
+                            // Without this, pressing on a suggestion moves the
+                            // focus first: the panel closes on focusout and the
+                            // click lands on nothing.
+                            <div class="absolute right-0 top-full z-50 mt-2 w-80" :hidden=$(open.get() == 0.0)
+                                 @mousedown=$(|e: Event| e.prevent_default())>
                                 suggestions(term: $(term.get()))
                             </div>
                         </form>
