@@ -9,3 +9,8 @@ command = "worker-build --release --no-default-features --features edge"
 binding = "DB"
 database_name = "bernard"
 database_id = "2d0c8ca9-0dc8-4f49-a860-896adf731a5e"
+
+# Cloudflare's image kitchen: resize + webp at the edge, no wasm codec on
+# board. See src/images/edge.rs -- absent binding degrades to proxying.
+[images]
+binding = "IMAGES"

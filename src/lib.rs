@@ -34,6 +34,7 @@ mod worker_adapter {
     async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         console_error_panic_hook::set_once();
         crate::db::install(env.d1("DB")?);
+        crate::images::install(&env);
 
         let url = req.url()?;
         let target = format!(
