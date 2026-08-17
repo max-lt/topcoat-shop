@@ -18,8 +18,21 @@ topcoat asset bundle --bin topcoat-shop            # --release for a release bin
 DATABASE_URL=shop.db ./target/debug/topcoat-shop   # HOST/PORT override 127.0.0.1:3000
 ```
 
-Migrations run at startup and seed the catalog. The first admin is promoted by
-hand: `update users set admin = 1 where email = '...'`.
+Migrations run at startup and seed the catalog.
+
+## Back office
+
+There is no bootstrap admin: register through the shop, then raise the flag by
+hand, on whichever base the host reads.
+
+```sh
+sqlite3 shop.db "update users set admin = 1 where email = '...'"
+npx wrangler d1 execute DB --remote --command "update users set admin = 1 where email = '...'"
+```
+
+`/admin` is then enough to keep the shop running: prices, stock and sizes per
+product, new products, photo uploads, products pulled from sale, and the order
+and customer lists. A non-admin gets a 404 there, not a login prompt.
 
 ## Product photography
 
