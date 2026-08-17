@@ -5,6 +5,7 @@
 use sqlx::SqlitePool;
 use topcoat::context::{app_context, Cx};
 use topcoat::cookie::{cookie, cookies, Cookie, Cookies};
+use topcoat::router::headers;
 use topcoat::session;
 use topcoat::Result;
 
@@ -51,6 +52,17 @@ pub async fn cart_count(cx: &Cx) -> Result<i64> {
 /// Forgets the current cart cookie, after checkout.
 pub fn forget_cart(cx: &Cx) {
     cookies(cx).remove(Cookie::build((CART_COOKIE, "")).path("/").build());
+}
+
+/// The absolute origin, for the few places that need one: feeds, the
+/// sitemap, og:image. The tunnel terminates TLS, so the scheme comes from
+/// X-Forwarded-Proto when it is there.
+pub fn public_origin(cx: &Cx) -> String {
+    let headers = headers(cx);
+    let host = headers.get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost:3000");
+    let scheme =
+        headers.get("x-forwarded-proto").and_then(|h| h.to_str().ok()).unwrap_or("http");
+    format!("{scheme}://{host}")
 }
 
 pub const SEEN_COOKIE: &str = "seen";

@@ -20,6 +20,7 @@ pub mod context;
 pub mod house;
 pub mod journal;
 pub mod orders;
+pub mod seo;
 pub mod shop;
 
 use context::{cart_count, current_user, pool};
@@ -150,6 +151,24 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
     let items = cart_count(cx).await?;
     let title = page_title(cx).await?;
 
+    // og:image rides the URL, like the title: a product page shows its
+    // photo, an article its illustration, everything else the mascot.
+    let origin = context::public_origin(cx);
+    let path = uri(cx).path().to_string();
+    let og_image = if let Some(sku) = path.strip_prefix("/produit/") {
+        format!("{origin}/img/{sku}?w=1600")
+    } else if let Some(slug) = path.strip_prefix("/journal/") {
+        let key = journal::POSTS
+            .iter()
+            .find(|(s, ..)| *s == slug)
+            .map(|(_, _, tag, ..)| journal::photo_key(tag))
+            .unwrap_or("journal-crabe");
+        format!("{origin}/img/{key}?w=1600")
+    } else {
+        format!("{origin}/img/journal-crabe?w=1600")
+    };
+    let og_url = format!("{origin}{path}");
+
     let content = match slot {
         Err(error) if error.downcast_ref::<NotFoundError>().is_some() => view! {
             (StatusCode::NOT_FOUND)
@@ -176,6 +195,14 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                 <meta name="description" content="Le vestiaire et la papeterie de Bernard : coton biologique, papeterie soignée, et un crabe qui s'y connaît en petites coquilles.">
                 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🦀%3C/text%3E%3C/svg%3E">
                 <meta name="theme-color" content="#fbf9f5">
+                <meta property="og:site_name" content="Bernard">
+                <meta property="og:type" content="website">
+                <meta property="og:title" content=(&title)>
+                <meta property="og:image" content=(&og_image)>
+                <meta property="og:url" content=(&og_url)>
+                <link rel="alternate" type="application/rss+xml" title="Le journal de Bernard" href="/journal/flux.xml">
+                <link rel="sitemap" href="/sitemap.xml">
+                <meta property="og:description" content="Le vestiaire et la papeterie de Bernard : coton biologique, papeterie soignée, séries courtes.">
                 font::link(font: SERIF)
                 font::link(font: SANS)
                 <link rel="stylesheet" href=(tailwind::stylesheet!())>
