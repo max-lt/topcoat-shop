@@ -36,3 +36,5 @@ the compiled-in ones.
 npx wrangler d1 execute DB --local --file migrations/0001_schema.sql   # then 0002, 0003
 npx wrangler dev
 ```
+
+See docs/DEPLOYMENT.md for the production checklist.
