@@ -4,7 +4,7 @@
 
 use sqlx::SqlitePool;
 use topcoat::context::{app_context, Cx};
-use topcoat::cookie::{cookie, cookies, Cookies};
+use topcoat::cookie::{cookie, cookies, Cookie, Cookies};
 use topcoat::session;
 use topcoat::Result;
 
@@ -46,6 +46,11 @@ pub fn current_cart(cx: &Cx) -> String {
 pub async fn cart_count(cx: &Cx) -> Result<i64> {
     let id = current_cart(cx);
     Ok(db::item_count(pool(cx), &id).await?)
+}
+
+/// Forgets the current cart cookie, after checkout.
+pub fn forget_cart(cx: &Cx) {
+    cookies(cx).remove(Cookie::build((CART_COOKIE, "")).path("/").build());
 }
 
 fn random_id() -> String {

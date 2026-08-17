@@ -19,6 +19,7 @@ pub mod cart;
 pub mod context;
 pub mod house;
 pub mod journal;
+pub mod orders;
 pub mod shop;
 
 use context::{cart_count, current_user, pool};

@@ -4,7 +4,7 @@
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{AssertSqlSafe, FromRow, SqlitePool};
 
@@ -64,6 +64,34 @@ impl CartLine {
     pub fn subtotal(&self) -> i64 {
         self.price_cents * self.quantity
     }
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Order {
+    pub id: i64,
+    pub reference: String,
+    pub total_cents: i64,
+    pub shipping_cents: i64,
+    pub shipping: String,
+    pub status: String,
+    pub address: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct OrderLine {
+    pub sku: String,
+    pub name: String,
+    pub size: String,
+    pub price_cents: i64,
+    pub quantity: i64,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct TrackingStep {
+    pub step: String,
+    pub note: String,
+    pub at: String,
 }
 
 /// Free shipping above this; the threshold is quoted in the header banner.
@@ -430,4 +458,267 @@ pub async fn item_count(pool: &SqlitePool, cart_id: &str) -> Result<i64, Error> 
             .fetch_one(pool)
             .await?,
     )
+}
+
+// --- orders
+
+/// Clamps a cart to the stock actually on the shelves: lines whose item is
+/// gone disappear, the others come down to what is left.
+pub async fn clamp_cart_to_stock(pool: &SqlitePool, cart_id: &str) -> Result<(), Error> {
+    // Delete first: the quantity > 0 check forbids clamping a line to zero.
+    sqlx::query(
+        "delete from cart_lines where cart_id = ?1 and coalesce((select v.stock \
+         from variants v where v.sku = cart_lines.sku and v.size = cart_lines.size), 0) <= 0",
+    )
+    .bind(cart_id)
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "update cart_lines set quantity = (select v.stock from variants v \
+         where v.sku = cart_lines.sku and v.size = cart_lines.size) \
+         where cart_id = ?1 and quantity > (select v.stock from variants v \
+         where v.sku = cart_lines.sku and v.size = cart_lines.size)",
+    )
+    .bind(cart_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Walks the cart into an order, in one transaction. `None` means the stock
+/// moved under the visitor's feet: nothing was written, their cart was
+/// clamped to what is really left, and the caller should send them back to
+/// look at it.
+pub async fn place_order(
+    pool: &SqlitePool,
+    user_id: i64,
+    cart_id: &str,
+    address: &str,
+    shipping: &str,
+) -> Result<Option<String>, Error> {
+    let lines = cart_lines(pool, cart_id).await?;
+    if lines.is_empty() {
+        return Err(anyhow::anyhow!("empty cart"));
+    }
+    let subtotal: i64 = lines.iter().map(CartLine::subtotal).sum();
+    let mode = shipping_mode(shipping);
+    let shipping_fee = shipping_cents(subtotal, mode.key);
+    let reference = order_reference();
+    let now = Utc::now();
+
+    let mut tx = pool.begin().await?;
+
+    let order_id: i64 = sqlx::query_scalar(
+        "insert into orders \
+         (reference, user_id, total_cents, shipping_cents, shipping, status, address, created_at) \
+         values (?1, ?2, ?3, ?4, ?5, 'paid', ?6, ?7) returning id",
+    )
+    .bind(&reference)
+    .bind(user_id)
+    .bind(subtotal + shipping_fee)
+    .bind(shipping_fee)
+    .bind(mode.key)
+    .bind(address)
+    .bind(now.to_rfc3339())
+    .fetch_one(&mut *tx)
+    .await?;
+
+    for line in &lines {
+        sqlx::query(
+            "insert into order_lines (order_id, sku, name, size, price_cents, quantity) \
+             values (?1, ?2, ?3, ?4, ?5, ?6)",
+        )
+        .bind(order_id)
+        .bind(&line.sku)
+        .bind(&line.name)
+        .bind(&line.size)
+        .bind(line.price_cents)
+        .bind(line.quantity)
+        .execute(&mut *tx)
+        .await?;
+
+        // The moment of truth: take the stock only if it is still there.
+        // Two carts can hold the same last items; only one gets them.
+        let taken = sqlx::query(
+            "update variants set stock = stock - ?3 \
+             where sku = ?1 and size = ?2 and stock >= ?3",
+        )
+        .bind(&line.sku)
+        .bind(&line.size)
+        .bind(line.quantity)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if taken == 0 {
+            // Explicit rollback: dropping the transaction rolls back lazily,
+            // and the clamp below would wait on its own lock.
+            tx.rollback().await?;
+            clamp_cart_to_stock(pool, cart_id).await?;
+            return Ok(None);
+        }
+
+        sqlx::query("update products set stock = stock - ?2 where sku = ?1")
+            .bind(&line.sku)
+            .bind(line.quantity)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for (offset, step, note) in [
+        (0i64, "paid", "Paiement accepté, la commande entre en file."),
+        (35, "packing", "Les articles sortent du stock de la coquille."),
+    ] {
+        sqlx::query("insert into tracking (order_id, step, note, at) values (?1, ?2, ?3, ?4)")
+            .bind(order_id)
+            .bind(step)
+            .bind(note)
+            .bind((now + Duration::minutes(offset)).to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::query("update orders set status = 'packing' where id = ?1")
+        .bind(order_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("delete from cart_lines where cart_id = ?1")
+        .bind(cart_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(Some(reference))
+}
+
+const ORDER_FIELDS: &str =
+    "id, reference, total_cents, shipping_cents, shipping, status, address, created_at";
+
+pub async fn orders(pool: &SqlitePool, user_id: i64) -> Result<Vec<Order>, Error> {
+    Ok(sqlx::query_as::<_, Order>(AssertSqlSafe(format!(
+        "select {ORDER_FIELDS} from orders where user_id = ?1 order by created_at desc"
+    )))
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?)
+}
+
+pub async fn order(
+    pool: &SqlitePool,
+    user_id: i64,
+    reference: &str,
+) -> Result<Option<(Order, Vec<OrderLine>, Vec<TrackingStep>)>, Error> {
+    let Some(order) = sqlx::query_as::<_, Order>(AssertSqlSafe(format!(
+        "select {ORDER_FIELDS} from orders where reference = ?1 and user_id = ?2"
+    )))
+    .bind(reference)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    let lines = sqlx::query_as::<_, OrderLine>(
+        "select sku, name, size, price_cents, quantity from order_lines where order_id = ?1",
+    )
+    .bind(order.id)
+    .fetch_all(pool)
+    .await?;
+
+    let tracking = sqlx::query_as::<_, TrackingStep>(
+        "select step, note, at from tracking where order_id = ?1 order by at",
+    )
+    .bind(order.id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(Some((order, lines, tracking)))
+}
+
+/// Moves an order one step along, so tracking has something to show without
+/// waiting on a real warehouse.
+pub async fn advance_order(
+    pool: &SqlitePool,
+    user_id: i64,
+    reference: &str,
+) -> Result<String, Error> {
+    let Some((order, ..)) = order(pool, user_id, reference).await? else {
+        return Err(anyhow::anyhow!("unknown order"));
+    };
+    let (next, note) = match order.status.as_str() {
+        "paid" => ("packing", "Les articles sortent du stock de la coquille."),
+        "packing" => ("shipped", "Colis remis au transporteur, suivi actif."),
+        "shipped" => ("delivered", "Livré. Bon déballage."),
+        _ => return Ok(order.status),
+    };
+
+    let mut tx = pool.begin().await?;
+    sqlx::query("update orders set status = ?2 where id = ?1")
+        .bind(order.id)
+        .bind(next)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("insert into tracking (order_id, step, note, at) values (?1, ?2, ?3, ?4)")
+        .bind(order.id)
+        .bind(next)
+        .bind(note)
+        .bind(Utc::now().to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+
+    Ok(next.to_string())
+}
+
+/// Cancels an order while it is still in the workshop -- `paid` or
+/// `packing`, nothing later -- and puts every unit back on the shelf.
+/// Returns whether anything was cancelled.
+pub async fn cancel_order(
+    pool: &SqlitePool,
+    user_id: i64,
+    reference: &str,
+) -> Result<bool, Error> {
+    let Some((order, lines, _)) = order(pool, user_id, reference).await? else {
+        return Ok(false);
+    };
+    if order.status != "paid" && order.status != "packing" {
+        return Ok(false);
+    }
+
+    let mut tx = pool.begin().await?;
+    for line in &lines {
+        sqlx::query("update variants set stock = stock + ?3 where sku = ?1 and size = ?2")
+            .bind(&line.sku)
+            .bind(&line.size)
+            .bind(line.quantity)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("update products set stock = stock + ?2 where sku = ?1")
+            .bind(&line.sku)
+            .bind(line.quantity)
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query("update orders set status = 'cancelled' where id = ?1")
+        .bind(order.id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("insert into tracking (order_id, step, note, at) values (?1, 'cancelled', ?2, ?3)")
+        .bind(order.id)
+        .bind("Commande annulée à votre demande.")
+        .bind(Utc::now().to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(true)
+}
+
+fn order_reference() -> String {
+    const ALPHABET: &[u8] = b"ACDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let mut raw = [0u8; 6];
+    rand::fill(&mut raw);
+    let suffix: String =
+        raw.iter().map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char).collect();
+    format!("BER-{suffix}")
 }

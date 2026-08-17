@@ -5,13 +5,14 @@
 
 use topcoat::context::Cx;
 
-use topcoat::router::{page, query_params};
+use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
+use topcoat::router::{content::Form, page, query_params, route};
 use topcoat::runtime::{procedure, shard};
 use topcoat::view::view;
 use topcoat::Result;
 
-use crate::app::context::{current_cart, pool};
-use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, MUTED, SOFT};
+use crate::app::context::{current_cart, current_user, forget_cart, pool};
+use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 #[procedure]
@@ -103,6 +104,7 @@ async fn cart(cx: &Cx) -> Result {
     let clamped = query_params::<CartState>(cx)?.clamped.is_some();
     let id = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &id).await?;
+    let signed_in = current_user(cx).await?.is_some();
     let empty = lines.is_empty();
 
     view! {
@@ -216,10 +218,140 @@ async fn cart(cx: &Cx) -> Result {
                             bill(version: $(version.get()), mode: $(standard.get()))
                         </div>
 
+                        if signed_in {
+                            <a href="/commander" class=(BTN.to_string() + " mt-6 w-full")>"Passer commande"</a>
+                        } else {
+                            <a href="/connexion" class=(BTN.to_string() + " mt-6 w-full")>"Se connecter pour commander"</a>
+                            <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>"Votre panier vous suivra."</p>
+                        }
                         <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-3 w-full")>"Continuer mes achats"</a>
                     </div>
                 </aside>
             </div>
         }
     }
+}
+
+// --- checkout
+
+#[page("/commander")]
+async fn checkout(cx: &Cx) -> Result {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    let id = current_cart(cx);
+    let lines = db::cart_lines(pool(cx), &id).await?;
+    if lines.is_empty() {
+        return view! {
+            page_heading(eyebrow: "Commande", title: "Rien à commander", lede: "Votre panier est vide.")
+            <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la collection"</a>
+        };
+    }
+
+    view! {
+        signal mode = "standard".to_string();
+        signal standard = "standard".to_string();
+        signal express = "express".to_string();
+
+        page_heading(
+            eyebrow: "Commande",
+            title: "Livraison et paiement",
+            lede: "Dernière étape. Aucun paiement réel n'est demandé : cette boutique est \
+                   une démonstration, et le crabe ne prend pas la carte."
+        )
+
+        <form method="post" action="/commander" class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
+            <div class="space-y-8">
+                <section>
+                    <h2 class="text-2xl">"Adresse de livraison"</h2>
+                    <p class=("mt-1 text-sm ".to_string() + MUTED)>"Commande au nom de " (&user.name) "."</p>
+
+                    <textarea name="address" required="required" rows="4" class=(FIELD.to_string() + " mt-4")
+                              placeholder="12 rue de la Marée&#10;29200 Brest">"12 rue de la Marée\n29200 Brest"</textarea>
+                </section>
+
+                <section>
+                    <h2 class="text-2xl">"Mode de livraison"</h2>
+                    <div class="mt-4 space-y-3">
+                        <label :class=$(if mode.get() == standard.get() {
+                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
+                               } else {
+                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
+                               })>
+                            <input type="radio" name="shipping" value="standard" checked="checked"
+                                   class="h-4 w-4 accent-gin-700"
+                                   @change=$(|_e| mode.set(standard.get()))>
+                            <span class="flex-1">
+                                <span class="block font-medium">"Standard"</span>
+                                <span class=("block text-sm ".to_string() + MUTED)>"3 à 5 jours ouvrés"</span>
+                            </span>
+                            <span class="tabular-nums">"4,90 €"</span>
+                        </label>
+
+                        <label :class=$(if mode.get() == express.get() {
+                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
+                               } else {
+                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
+                               })>
+                            <input type="radio" name="shipping" value="express"
+                                   class="h-4 w-4 accent-gin-700"
+                                   @change=$(|_e| mode.set(express.get()))>
+                            <span class="flex-1">
+                                <span class="block font-medium">"Express"</span>
+                                <span class=("block text-sm ".to_string() + MUTED)>"24 à 48 heures"</span>
+                            </span>
+                            <span class="tabular-nums">"11,90 €"</span>
+                        </label>
+                    </div>
+                    <p class=("mt-3 text-sm ".to_string() + MUTED)>
+                        "Au-delà de " (format_price(db::FREE_SHIPPING_CENTS)) ", la livraison est offerte quel que soit le mode."
+                    </p>
+                </section>
+
+                <section>
+                    <h2 class="text-2xl">"Paiement"</h2>
+                    <p class=("mt-3 rounded-2xl bg-oat-100 px-5 py-4 text-sm leading-relaxed ".to_string() + SOFT)>
+                        "Aucun moyen de paiement n'est demandé : valider enregistre la commande, \
+                         décrémente le stock et ouvre son suivi, sans qu'un centime ne circule."
+                    </p>
+                </section>
+            </div>
+
+            <aside class="lg:sticky lg:top-24 lg:h-fit">
+                <div class=(CARD.to_string() + " p-6")>
+                    <p class=(EYEBROW)>"Votre commande"</p>
+                    <div class="mt-5">
+                        bill(version: $(0.0), mode: $(mode.get()))
+                    </div>
+                    <button class=(BTN.to_string() + " mt-6 w-full")>"Valider la commande"</button>
+                    <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>"Retour accepté 30 jours."</p>
+                </div>
+            </aside>
+        </form>
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct CheckoutForm {
+    address: String,
+    #[serde(default)]
+    shipping: String,
+}
+
+/// A plain form POST: it works without JavaScript, and the redirect
+/// afterwards keeps a refresh from ordering twice.
+#[route(POST "/commander")]
+async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<SeeOther> {
+    let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    let id = current_cart(cx);
+
+    let address = choice.address.trim().to_string();
+
+    let Some(reference) =
+        db::place_order(pool(cx), user.id, &id, &address, &choice.shipping).await?
+    else {
+        // Someone else took the last units first: the cart was clamped,
+        // the visitor goes back to see what is really left.
+        return Ok(see_other("/panier?ajuste=1"));
+    };
+    forget_cart(cx);
+    Ok(see_other(&format!("/commande/{reference}")))
 }

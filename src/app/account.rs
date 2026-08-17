@@ -10,8 +10,9 @@ use topcoat::view::view;
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, pool};
-use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED};
-use crate::db;
+use crate::app::orders::status_badge;
+use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
+use crate::db::{self, format_price};
 
 #[query_params(error = bad_request)]
 struct Message {
@@ -140,6 +141,9 @@ async fn sign_out(cx: &Cx) -> Result<SeeOther> {
 #[page("/compte")]
 async fn account(cx: &Cx) -> Result {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
+    let orders = db::orders(pool(cx), user.id).await?;
+    let no_orders = orders.is_empty();
+    let how_many = orders.len();
 
     view! {
         <div class="flex flex-wrap items-end justify-between gap-6">
@@ -152,5 +156,37 @@ async fn account(cx: &Cx) -> Result {
                 <button class=(BTN_OUTLINE)>"Se déconnecter"</button>
             </form>
         </div>
+
+        <section class="mt-16">
+            <div class="flex items-baseline justify-between">
+                <h2 class="text-3xl">"Vos commandes"</h2>
+                if !no_orders {
+                    <span class=("text-sm ".to_string() + MUTED)>
+                        (format!("{how_many} commande{}", if how_many > 1 { "s" } else { "" }))
+                    </span>
+                }
+            </div>
+
+            if no_orders {
+                <div class=(CARD.to_string() + " mt-8 p-16 text-center")>
+                    <p class=(SOFT)>"Aucune commande pour l'instant."</p>
+                    <a href="/boutique" class=(BTN.to_string() + " mt-6")>"Voir la collection"</a>
+                </div>
+            } else {
+                <ul class="mt-8 divide-y divide-oat-200 border-y border-oat-200">
+                    for o in orders {
+                        <a href=("/commande/".to_string() + &o.reference) class="block transition hover:bg-oat-100">
+                            <li class="flex flex-wrap items-center gap-4 px-2 py-5">
+                                <span class="font-medium tabular-nums">(&o.reference)</span>
+                                status_badge(status: o.status.clone())
+                                <span class=("text-sm ".to_string() + MUTED)>(o.created_at.get(..10).unwrap_or_default().to_string())</span>
+                                <span class="ml-auto tabular-nums">(format_price(o.total_cents))</span>
+                                <span class="text-gin-700">"→"</span>
+                            </li>
+                        </a>
+                    }
+                </ul>
+            }
+        </section>
     }
 }
