@@ -550,21 +550,11 @@ pub async fn place_order(
             .await?;
     }
 
-    for (offset, step, note) in [
-        (0i64, "paid", "Paiement accepté, la commande entre en file."),
-        (35, "packing", "Les articles sortent du stock de la coquille."),
-    ] {
-        sqlx::query("insert into tracking (order_id, step, note, at) values (?1, ?2, ?3, ?4)")
-            .bind(order_id)
-            .bind(step)
-            .bind(note)
-            .bind((now + Duration::minutes(offset)).to_rfc3339())
-            .execute(&mut *tx)
-            .await?;
-    }
-
-    sqlx::query("update orders set status = 'packing' where id = ?1")
+    // A fresh order is paid and nothing more: the sweep moves it on.
+    sqlx::query("insert into tracking (order_id, step, note, at) values (?1, 'paid', ?2, ?3)")
         .bind(order_id)
+        .bind("Paiement accepté, la commande entre en file.")
+        .bind(now.to_rfc3339())
         .execute(&mut *tx)
         .await?;
 

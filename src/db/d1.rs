@@ -465,7 +465,7 @@ pub async fn place_order(
     execute(
         "insert into orders \
          (reference, user_id, total_cents, shipping_cents, shipping, status, address, created_at) \
-         values (?1, ?2, ?3, ?4, ?5, 'packing', ?6, ?7)",
+         values (?1, ?2, ?3, ?4, ?5, 'paid', ?6, ?7)",
         &[
             s(&reference),
             n(user_id),
@@ -493,14 +493,10 @@ pub async fn place_order(
         )
         .await?;
     }
+    // A fresh order is paid and nothing more: the sweep moves it on.
     execute(
         "insert into tracking (order_id, step, note, at) values (?1, 'paid', ?2, ?3)",
         &[n(order_id), s("Paiement accepté, la commande entre en file."), s(&now)],
-    )
-    .await?;
-    execute(
-        "insert into tracking (order_id, step, note, at) values (?1, 'packing', ?2, ?3)",
-        &[n(order_id), s("Les articles sortent du stock de la coquille."), s(&now)],
     )
     .await?;
     execute("delete from cart_lines where cart_id = ?1", &[s(cart_id)]).await?;
