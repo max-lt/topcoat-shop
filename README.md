@@ -18,7 +18,9 @@ topcoat asset bundle --bin topcoat-shop            # --release for a release bin
 DATABASE_URL=shop.db ./target/debug/topcoat-shop   # HOST/PORT override 127.0.0.1:3000
 ```
 
-Migrations run at startup and seed the catalog.
+Migrations run at startup and seed the catalog. An order is paid when it is
+placed and climbs one rung of its ladder every `ADVANCE_EVERY` seconds, ten
+minutes by default; a demo runs it faster.
 
 ## Back office
 

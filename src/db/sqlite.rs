@@ -5,7 +5,7 @@
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{AssertSqlSafe, SqlitePool};
 
@@ -630,11 +630,8 @@ pub async fn advance_order(
     let Some((order, ..)) = order(pool, user_id, reference).await? else {
         return Err(anyhow::anyhow!("unknown order"));
     };
-    let (next, note) = match order.status.as_str() {
-        "paid" => ("packing", "Les articles sortent du stock de la coquille."),
-        "packing" => ("shipped", "Colis remis au transporteur, suivi actif."),
-        "shipped" => ("delivered", "Livré. Bon déballage."),
-        _ => return Ok(order.status),
+    let Some((next, note)) = next_step(&order.status) else {
+        return Ok(order.status);
     };
 
     let mut tx = pool.begin().await?;
@@ -766,6 +763,37 @@ pub async fn set_stock(
     resum_stock(&mut tx, sku).await?;
     tx.commit().await?;
     Ok(())
+}
+
+/// Walks every order that still has a rung to climb, one rung per call.
+/// The tracking line is the one a visitor gets by advancing a parcel by
+/// hand.
+pub async fn advance_pending(pool: &SqlitePool) -> Result<u64, Error> {
+    let waiting: Vec<(i64, String)> =
+        sqlx::query_as("select id, status from orders where status in ('paid', 'packing', 'shipped')")
+            .fetch_all(pool)
+            .await?;
+
+    let mut moved = 0;
+    for (id, status) in waiting {
+        let Some((next, note)) = next_step(&status) else { continue };
+        let mut tx = pool.begin().await?;
+        sqlx::query("update orders set status = ?2 where id = ?1")
+            .bind(id)
+            .bind(next)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("insert into tracking (order_id, step, note, at) values (?1, ?2, ?3, ?4)")
+            .bind(id)
+            .bind(next)
+            .bind(note)
+            .bind(Utc::now().to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        moved += 1;
+    }
+    Ok(moved)
 }
 
 // --- admin: products

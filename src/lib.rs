@@ -28,7 +28,10 @@ mod worker_adapter {
     use topcoat::cookie::RouterBuilderCookieExt;
     use topcoat::router::{BodyLimit, Body, Router, RouterBuilderDiscoverExt};
     use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
-    use worker::{event, Context, Env, Error, Headers, Request, Response, Result};
+    use worker::{
+        console_log, event, Context, Env, Error, Headers, Request, Response, Result,
+        ScheduleContext, ScheduledEvent,
+    };
 
     /// The whole shop as a pure function: worker::Request in, the router's
     /// handle(), worker::Response out. No server underneath.
@@ -75,5 +78,22 @@ mod worker_adapter {
         Ok(Response::from_bytes(bytes.to_vec())?
             .with_status(head.status.as_u16())
             .with_headers(headers))
+    }
+
+    /// The parcels march on their own, on the cron declared in
+    /// wrangler.toml. A scheduled event has no request to answer, so a
+    /// failure only has the log to land in.
+    #[event(scheduled)]
+    async fn tick(event: ScheduledEvent, env: Env, _ctx: ScheduleContext) {
+        console_error_panic_hook::set_once();
+        let Ok(d1) = env.d1("DB") else {
+            console_log!("cron {}: no DB binding", event.cron());
+            return;
+        };
+        crate::db::install(d1);
+        match crate::db::advance_pending(crate::db::Db).await {
+            Ok(moved) => console_log!("cron {}: {moved} orders advanced", event.cron()),
+            Err(e) => console_log!("cron {}: {e}", event.cron()),
+        }
     }
 }

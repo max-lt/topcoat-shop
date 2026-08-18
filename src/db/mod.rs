@@ -194,6 +194,17 @@ pub fn shipping_cents(subtotal: i64, key: &str) -> i64 {
     if subtotal >= FREE_SHIPPING_CENTS { 0 } else { shipping_mode(key).cents }
 }
 
+/// The rung above an order's status, and what its tracking line says.
+/// `None` once the order has nowhere left to go.
+pub fn next_step(status: &str) -> Option<(&'static str, &'static str)> {
+    match status {
+        "paid" => Some(("packing", "Les articles sortent du stock de la coquille.")),
+        "packing" => Some(("shipped", "Colis remis au transporteur, suivi actif.")),
+        "shipped" => Some(("delivered", "Livré. Bon déballage.")),
+        _ => None,
+    }
+}
+
 /// Prices are integers everywhere; this is the only place they become text.
 pub fn format_price(cents: i64) -> String {
     format!("{},{:02}\u{a0}€", cents / 100, (cents % 100).abs())

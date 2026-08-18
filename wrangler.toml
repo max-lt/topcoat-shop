@@ -19,6 +19,11 @@ bucket_name = "bernard-photos"
 [images]
 binding = "IMAGES"
 
+# The parcels march: every ten minutes, each order that still has a rung
+# climbs one. See the scheduled event in src/lib.rs.
+[triggers]
+crons = ["*/10 * * * *"]
+
 # Written by `cargo run --bin static-bundle`. A request matching a file
 # here never reaches the Worker.
 [assets]

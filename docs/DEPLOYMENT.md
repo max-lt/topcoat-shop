@@ -34,6 +34,9 @@ whatever is there.
 - No open transactions on D1: checkout takes stock with guarded
   decrements and compensates if it loses the race. Stock never goes
   negative; a lost race costs a few statements, not an oversold order.
+- Orders advance on the cron trigger declared in wrangler.toml, where the
+  binary uses a task on a timer. Fire one by hand with
+  `wrangler dev --test-scheduled` and a visit to `/__scheduled`.
 - An upload is bounded by the IMAGES binding rather than by a decoder in
   process, and lands in R2 rather than in a directory.
 - No dominant colours behind the photos: computing one needs a decoder.

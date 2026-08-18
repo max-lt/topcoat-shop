@@ -16,6 +16,7 @@ async fn main() {
         .expect("database");
 
     images::prewarm();
+    march_parcels(pool.clone());
 
     let router = Router::builder()
         .discover()
@@ -26,4 +27,26 @@ async fn main() {
         .app_context(pool)
         .build();
     topcoat::start(router).await.unwrap();
+}
+
+/// What the Worker gets from a cron trigger, the binary gets from a task:
+/// every order that still has a rung climbs one. `ADVANCE_EVERY` is the
+/// period in seconds, ten minutes by default, and a demo runs it faster.
+fn march_parcels(pool: sqlx::SqlitePool) {
+    let period = std::env::var("ADVANCE_EVERY")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(600);
+
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(period));
+        loop {
+            ticker.tick().await;
+            match db::advance_pending(&pool).await {
+                Ok(0) => {}
+                Ok(moved) => println!("{moved} commandes avancées"),
+                Err(e) => eprintln!("avancement des commandes : {e}"),
+            }
+        }
+    });
 }

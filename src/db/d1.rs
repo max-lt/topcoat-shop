@@ -550,11 +550,8 @@ pub async fn advance_order(_: Db, user_id: i64, reference: &str) -> Result<Strin
     let Some((order, ..)) = order(Db, user_id, reference).await? else {
         return Err(anyhow::anyhow!("unknown order"));
     };
-    let (next, note) = match order.status.as_str() {
-        "paid" => ("packing", "Les articles sortent du stock de la coquille."),
-        "packing" => ("shipped", "Colis remis au transporteur, suivi actif."),
-        "shipped" => ("delivered", "Livré. Bon déballage."),
-        _ => return Ok(order.status),
+    let Some((next, note)) = next_step(&order.status) else {
+        return Ok(order.status);
     };
     execute("update orders set status = ?2 where id = ?1", &[n(order.id), s(next)]).await?;
     execute(
@@ -717,6 +714,36 @@ pub async fn admin_customers(_: Db) -> Result<Vec<AdminCustomer>, Error> {
 }
 
 /// Every product, hidden ones included: the back office has no curtain.
+/// Walks every order that still has a rung to climb, one rung per call.
+/// The tracking line is the one a visitor gets by advancing a parcel by
+/// hand.
+pub async fn advance_pending(_: Db) -> Result<u64, Error> {
+    #[derive(Deserialize)]
+    struct Waiting {
+        id: i64,
+        status: String,
+    }
+
+    let waiting: Vec<Waiting> = fetch_all(
+        "select id, status from orders where status in ('paid', 'packing', 'shipped')",
+        &[],
+    )
+    .await?;
+
+    let mut moved = 0;
+    for order in waiting {
+        let Some((next, note)) = next_step(&order.status) else { continue };
+        execute("update orders set status = ?2 where id = ?1", &[n(order.id), s(next)]).await?;
+        execute(
+            "insert into tracking (order_id, step, note, at) values (?1, ?2, ?3, ?4)",
+            &[n(order.id), s(next), s(note), s(&Utc::now().to_rfc3339())],
+        )
+        .await?;
+        moved += 1;
+    }
+    Ok(moved)
+}
+
 pub async fn all_products(_: Db) -> Result<Vec<Product>, Error> {
     fetch_all(
         &format!("select {PRODUCT_FIELDS} from products order by hidden, category, name"),
