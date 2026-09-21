@@ -1,3 +1,4 @@
-# rand's getrandom must read entropy through JS on wasm.
+# getrandom must read entropy through JS on wasm. rand draws session ids
+# this way, argon2 its password salts.
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

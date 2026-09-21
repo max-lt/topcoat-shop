@@ -6,9 +6,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
+use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -297,9 +295,8 @@ pub async fn subscribe(_: Db, email: &str) -> Result<bool, Error> {
 // --- accounts
 
 pub async fn register(_: Db, email: &str, name: &str, password: &str) -> Result<User, Error> {
-    let salt = SaltString::generate(&mut OsRng);
     let hash = Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map_err(|e| anyhow::anyhow!("hashing: {e}"))?
         .to_string();
     execute(
@@ -339,9 +336,10 @@ pub async fn verify_credentials(
     else {
         return Ok(None);
     };
-    let expected =
-        PasswordHash::new(&row.password_hash).map_err(|e| anyhow::anyhow!("hash: {e}"))?;
-    if Argon2::default().verify_password(password.as_bytes(), &expected).is_err() {
+    if Argon2::default()
+        .verify_password(password.as_bytes(), row.password_hash.as_str())
+        .is_err()
+    {
         return Ok(None);
     }
     Ok(Some(User { id: row.id, email: row.email, name: row.name, admin: row.admin }))

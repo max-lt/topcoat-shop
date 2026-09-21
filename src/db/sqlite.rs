@@ -2,9 +2,7 @@
 //! Queries live here rather than in the pages so the SQL can be read in
 //! one place -- and so swapping the store means swapping one file.
 
-use argon2::password_hash::rand_core::OsRng;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
+use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{AssertSqlSafe, SqlitePool};
@@ -127,9 +125,8 @@ pub async fn register(
     name: &str,
     password: &str,
 ) -> Result<User, Error> {
-    let salt = SaltString::generate(&mut OsRng);
     let hash = Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map_err(|e| anyhow::anyhow!("hashing: {e}"))?
         .to_string();
 
@@ -162,8 +159,7 @@ pub async fn verify_credentials(
     let Some((id, email, name, hash, admin)) = row else {
         return Ok(None);
     };
-    let expected = PasswordHash::new(&hash).map_err(|e| anyhow::anyhow!("hash: {e}"))?;
-    if Argon2::default().verify_password(password.as_bytes(), &expected).is_err() {
+    if Argon2::default().verify_password(password.as_bytes(), hash.as_str()).is_err() {
         return Ok(None);
     }
     Ok(Some(User { id, email, name, admin }))
