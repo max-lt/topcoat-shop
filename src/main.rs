@@ -4,8 +4,8 @@ use tokio::net::TcpListener;
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::router::{BodyLimit, Router, RouterBuilderDiscoverExt};
+use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
 use topcoat_shop::app::admin::PHOTO_LIMIT;
@@ -63,8 +63,11 @@ fn march_parcels(pool: sqlx::SqlitePool) {
             ticker.tick().await;
             match db::advance_pending(&pool).await {
                 Ok(0) => {}
-                Ok(moved) => println!("{moved} commandes avancées"),
-                Err(e) => eprintln!("avancement des commandes : {e}"),
+                Ok(moved) => {
+                    let s = if moved > 1 { "s" } else { "" };
+                    println!("{moved} order{s} climbed a rung");
+                }
+                Err(e) => eprintln!("advancing orders: {e}"),
             }
         }
     });
