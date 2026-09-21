@@ -2,6 +2,7 @@
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
+use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::router::{BodyLimit, Router, RouterBuilderDiscoverExt};
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
@@ -19,6 +20,7 @@ async fn main() {
     march_parcels(pool.clone());
 
     let router = Router::builder()
+        .runtime()
         .discover()
         .assets(assets)
         .cookies()

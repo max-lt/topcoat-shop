@@ -26,6 +26,7 @@ pub mod images;
 mod worker_adapter {
     use http_body_util::BodyExt;
     use topcoat::cookie::RouterBuilderCookieExt;
+    use topcoat::runtime::RouterBuilderRuntimeExt;
     use topcoat::router::{BodyLimit, Body, Router, RouterBuilderDiscoverExt};
     use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
     use worker::{
@@ -56,6 +57,7 @@ mod worker_adapter {
             request.body(Body::from(body)).map_err(|e| Error::RustError(e.to_string()))?;
 
         let router = Router::builder()
+            .runtime()
             .discover()
             .cookies()
             .sessions(SessionConfig::default())

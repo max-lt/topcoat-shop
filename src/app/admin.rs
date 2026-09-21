@@ -6,7 +6,7 @@ use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::content::multipart::Multipart;
 use topcoat::router::{content::Form, page, path_param, route};
-use topcoat::view::{component, view};
+use topcoat::view::{component, view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_admin, pool};
@@ -22,8 +22,8 @@ const TABS: [(&str, &str); 4] = [
 ];
 
 #[component]
-async fn header(active: &str) -> Result {
-    view! {
+async fn header(active: &str) -> Result<impl View> {
+    Ok(view! {
         <p class=(EYEBROW)>"Administration"</p>
         <h1 class="mt-3 text-4xl sm:text-5xl">"La coquille, côté cale"</h1>
         <nav class="mt-8 flex flex-wrap gap-2 border-b border-oat-200 pb-4">
@@ -35,29 +35,29 @@ async fn header(active: &str) -> Result {
                 }
             }
         </nav>
-    }
+    })
 }
 
 #[component]
-async fn stat_card(value: String, label: &'static str) -> Result {
-    view! {
+async fn stat_card(value: String, label: &'static str) -> Result<impl View> {
+    Ok(view! {
         <div class=(CARD.to_string() + " p-6")>
             <p class="font-display text-3xl tabular-nums">(value)</p>
             <p class=("mt-1 text-sm ".to_string() + MUTED)>(label)</p>
         </div>
-    }
+    })
 }
 
 const CELL: &str = "py-3 pr-6";
 const HEAD: &str = "py-3 pr-6 text-left text-xs font-medium uppercase tracking-widest text-oat-600";
 
 #[page("/admin")]
-async fn dashboard(cx: &Cx) -> Result {
+async fn dashboard(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let stats = db::admin_stats(pool(cx)).await?;
     let recent: Vec<_> = db::admin_orders(pool(cx)).await?.into_iter().take(8).collect();
 
-    view! {
+    Ok(view! {
         header(active: "/admin")
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -94,15 +94,15 @@ async fn dashboard(cx: &Cx) -> Result {
                 </tbody>
             </table>
         </div>
-    }
+    })
 }
 
 #[page("/admin/produits")]
-async fn products(cx: &Cx) -> Result {
+async fn products(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let products = db::all_products(pool(cx)).await?;
 
-    view! {
+    Ok(view! {
         header(active: "/admin/produits")
 
         <p class="mt-6">
@@ -154,13 +154,13 @@ async fn products(cx: &Cx) -> Result {
                 </tbody>
             </table>
         </div>
-    }
+    })
 }
 
 path_param!(sku);
 
 #[page("/admin/produit/{sku}")]
-async fn product(cx: &Cx) -> Result {
+async fn product(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let sku = path_param::<Sku>(cx).to_string();
     let p = db::product(pool(cx), &sku).await?.ok_or_not_found()?;
@@ -169,7 +169,7 @@ async fn product(cx: &Cx) -> Result {
     let price_text = format!("{},{:02}", p.price_cents / 100, p.price_cents % 100);
     let is_new = p.is_new != 0;
 
-    view! {
+    Ok(view! {
         header(active: "/admin/produits")
 
         <div class="mt-8 flex items-center gap-5">
@@ -293,15 +293,15 @@ async fn product(cx: &Cx) -> Result {
         <p class="mt-8">
             <a href="/admin/produits" class="text-sm text-gin-700 underline underline-offset-4">"← Tous les produits"</a>
         </p>
-    }
+    })
 }
 
 #[page("/admin/nouveau")]
-async fn new_product(cx: &Cx) -> Result {
+async fn new_product(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let categories = db::categories(pool(cx)).await?;
 
-    view! {
+    Ok(view! {
         header(active: "/admin/produits")
 
         <h2 class="mt-8 text-3xl">"Nouveau produit"</h2>
@@ -354,15 +354,15 @@ async fn new_product(cx: &Cx) -> Result {
             <button class=(BTN)>"Créer le produit"</button>
             <p class=("text-xs ".to_string() + MUTED)>"La photo se téléverse à l'étape suivante, sur la fiche."</p>
         </form>
-    }
+    })
 }
 
 #[page("/admin/commandes")]
-async fn orders(cx: &Cx) -> Result {
+async fn orders(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let orders = db::admin_orders(pool(cx)).await?;
 
-    view! {
+    Ok(view! {
         header(active: "/admin/commandes")
 
         <div class="mt-8 overflow-x-auto">
@@ -391,15 +391,15 @@ async fn orders(cx: &Cx) -> Result {
                 </tbody>
             </table>
         </div>
-    }
+    })
 }
 
 #[page("/admin/clients")]
-async fn customers(cx: &Cx) -> Result {
+async fn customers(cx: &Cx) -> Result<impl View> {
     current_admin(cx).await?.ok_or_not_found()?;
     let customers = db::admin_customers(pool(cx)).await?;
 
-    view! {
+    Ok(view! {
         header(active: "/admin/clients")
 
         <div class="mt-8 overflow-x-auto">
@@ -430,7 +430,7 @@ async fn customers(cx: &Cx) -> Result {
                 </tbody>
             </table>
         </div>
-    }
+    })
 }
 
 // --- actions
@@ -536,8 +536,8 @@ async fn remove_variant(cx: &Cx, Form(f): Form<VariantTarget>) -> Result<SeeOthe
 }
 
 #[component]
-async fn photo_card(sku: String) -> Result {
-    view! {
+async fn photo_card(sku: String) -> Result<impl View> {
+    Ok(view! {
         <form method="post" action="/admin/photo" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-center gap-3">
             <input type="hidden" name="sku" value=(&sku)>
             <input type="file" name="file" accept="image/*" required="required"
@@ -547,7 +547,7 @@ async fn photo_card(sku: String) -> Result {
         <p class=("mt-3 text-xs ".to_string() + MUTED)>
             "JPEG ou PNG ; recadrée en JPEG, 1600 px de large au plus, servie par /img comme les autres."
         </p>
-    }
+    })
 }
 
 /// A phone shot passes the router's 2 MiB default without trying, and

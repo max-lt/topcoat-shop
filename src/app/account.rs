@@ -6,7 +6,7 @@ use topcoat::context::Cx;
 use topcoat::router::error::{redirect, see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{content::Form, page, query_params, route};
 use topcoat::session;
-use topcoat::view::view;
+use topcoat::view::{view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, pool};
@@ -20,13 +20,13 @@ struct Message {
 }
 
 #[page("/connexion")]
-async fn sign_in_page(cx: &Cx) -> Result {
+async fn sign_in_page(cx: &Cx) -> Result<impl View> {
     if current_user(cx).await?.is_some() {
         return Err(redirect("/compte").into());
     }
     let message = query_params::<Message>(cx)?.err.clone().unwrap_or_default();
 
-    view! {
+    Ok(view! {
         <div class="mx-auto max-w-4xl">
             page_heading(
                 eyebrow: "Compte",
@@ -73,7 +73,7 @@ async fn sign_in_page(cx: &Cx) -> Result {
                 </form>
             </div>
         </div>
-    }
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -146,7 +146,7 @@ async fn sign_out(cx: &Cx) -> Result<SeeOther> {
 }
 
 #[page("/compte")]
-async fn account(cx: &Cx) -> Result {
+async fn account(cx: &Cx) -> Result<impl View> {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let orders = db::orders(pool(cx), user.id).await?;
     let addresses = db::addresses(pool(cx), user.id).await?;
@@ -154,7 +154,7 @@ async fn account(cx: &Cx) -> Result {
     let how_many = orders.len();
     let no_address = addresses.is_empty();
 
-    view! {
+    Ok(view! {
         <div class="flex flex-wrap items-end justify-between gap-6">
             <div>
                 <p class=(EYEBROW)>"Compte"</p>
@@ -248,7 +248,7 @@ async fn account(cx: &Cx) -> Result {
                 </ul>
             }
         </section>
-    }
+    })
 }
 
 // --- address book

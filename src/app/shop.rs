@@ -5,8 +5,8 @@
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{content::Form, page, path_param, query_params, route};
-use topcoat::runtime::{procedure, shard, Event};
-use topcoat::view::view;
+use topcoat::runtime::{procedure, shard, signal, Signal, Event};
+use topcoat::view::{component, view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, note_seen, pool};
@@ -30,7 +30,7 @@ pub struct Filters {
 }
 
 #[page("/boutique")]
-async fn shop(cx: &Cx) -> Result {
+async fn shop(cx: &Cx) -> Result<impl View> {
     let filters = query_params::<Filters>(cx)?;
     let category = filters.category.clone().unwrap_or_default();
     let sort = filters.sort.unwrap_or(0);
@@ -79,7 +79,7 @@ async fn shop(cx: &Cx) -> Result {
     // filters compose instead of resetting one another.
     let link = |cat: &str, s: i64| format!("/boutique?categorie={cat}&tri={s}");
 
-    view! {
+    Ok(view! {
         page_heading(
             eyebrow: "La boutique",
             title: shelf_title,
@@ -134,7 +134,7 @@ async fn shop(cx: &Cx) -> Result {
                 }
             </div>
         }
-    }
+    })
 }
 
 // --- search
@@ -148,7 +148,7 @@ struct SearchQuery {
 /// empty page: it shows a selection, so the visitor always has something to
 /// look at.
 #[shard]
-async fn results(cx: &Cx, term: String) -> Result {
+async fn results(cx: &Cx, term: String) -> Result<impl View> {
     let searching = !term.trim().is_empty();
     let products = if searching {
         db::search(pool(cx), &term).await?
@@ -158,7 +158,7 @@ async fn results(cx: &Cx, term: String) -> Result {
     let how_many = products.len();
     let nothing = searching && products.is_empty();
 
-    view! {
+    Ok(view! {
         if nothing {
             <div class="py-16 text-center">
                 <p class="font-display text-3xl">"Rien pour « " (&term) " »"</p>
@@ -181,16 +181,16 @@ async fn results(cx: &Cx, term: String) -> Result {
                 }
             </div>
         }
-    }
+    })
 }
 
 #[page("/recherche")]
-async fn search(cx: &Cx) -> Result {
+async fn search(cx: &Cx) -> Result<impl View> {
     let initial = query_params::<SearchQuery>(cx)?.q.clone().unwrap_or_default();
 
-    view! {
-        signal term = initial;
+    let term = signal(cx, || initial);
 
+    Ok(view! {
         page_heading(
             eyebrow: "Recherche",
             title: "Trouver un article",
@@ -209,7 +209,7 @@ async fn search(cx: &Cx) -> Result {
         <div class="mt-10">
             results(term: $(term.get()))
         </div>
-    }
+    })
 }
 
 // --- product page
@@ -233,8 +233,41 @@ async fn in_cart(cx: &Cx, sku: String, size: String) -> Result<f64> {
 
 path_param!(sku);
 
+/// One size button. The option owns the signals its handler captures, and
+/// takes the page's signals so a click moves the whole page to that size.
+#[component]
+async fn size_option(
+    cx: &Cx,
+    v: db::Variant,
+    sku_sig: Signal<String>,
+    size: Signal<String>,
+    size_stock: Signal<f64>,
+    held_qty: Signal<f64>,
+) -> Result<impl View> {
+    let label = signal(cx, || v.size.clone());
+    let option_stock = signal(cx, || v.stock as f64);
+
+    Ok(view! {
+        if v.stock > 0 {
+            <button
+                :class=$(if size.get() == label.get() {
+                    "min-w-14 rounded-xl bg-oat-900 px-4 py-2.5 text-sm text-oat-50"
+                } else {
+                    "min-w-14 rounded-xl px-4 py-2.5 text-sm ring-1 ring-oat-300 transition hover:ring-oat-900"
+                })
+                @click=$(async |_e| {
+                    size.set(label.get());
+                    size_stock.set(option_stock.get());
+                    held_qty.set(in_cart(sku_sig.get(), label.get()).await);
+                })>(&v.size)</button>
+        } else {
+            <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
+        }
+    })
+}
+
 #[page("/produit/{sku}")]
-async fn product(cx: &Cx) -> Result {
+async fn product(cx: &Cx) -> Result<impl View> {
     let sku = path_param::<Sku>(cx).to_string();
     // A hidden product has left the floor: its page answers 404 like any
     // reference that never existed.
@@ -291,12 +324,12 @@ async fn product(cx: &Cx) -> Result {
     };
     let first_held = held_of(&first_size);
 
-    view! {
-        signal sku_sig = page_sku;
-        signal size = first_size;
-        signal size_stock = first_stock;
-        signal held_qty = first_held;
+    let sku_sig = signal(cx, || page_sku);
+    let size = signal(cx, || first_size);
+    let size_stock = signal(cx, || first_stock);
+    let held_qty = signal(cx, || first_held);
 
+    Ok(view! {
         <div class="flex items-center justify-between gap-4">
             <nav class=("text-sm ".to_string() + MUTED)>
                 <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
@@ -376,26 +409,14 @@ async fn product(cx: &Cx) -> Result {
                             </div>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 for v in variants.iter().filter(|v| !v.size.is_empty()) {
-                                    // A signal per option: a handler can capture a
-                                    // signal, never a loop variable.
-                                    signal label = v.size.clone();
-                                    signal option_stock = v.stock as f64;
-
-                                    if v.stock > 0 {
-                                        <button
-                                            :class=$(if size.get() == label.get() {
-                                                "min-w-14 rounded-xl bg-oat-900 px-4 py-2.5 text-sm text-oat-50"
-                                            } else {
-                                                "min-w-14 rounded-xl px-4 py-2.5 text-sm ring-1 ring-oat-300 transition hover:ring-oat-900"
-                                            })
-                                            @click=$(async |_e| {
-                                                size.set(label.get());
-                                                size_stock.set(option_stock.get());
-                                                held_qty.set(in_cart(sku_sig.get(), label.get()).await);
-                                            })>(&v.size)</button>
-                                    } else {
-                                        <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
-                                    }
+                                size_option(
+                                    key: &v.size,
+                                    v: v.clone(),
+                                    sku_sig: sku_sig.clone(),
+                                    size: size.clone(),
+                                    size_stock: size_stock.clone(),
+                                    held_qty: held_qty.clone(),
+                                )
                                 }
                             </div>
 
@@ -554,7 +575,7 @@ async fn product(cx: &Cx) -> Result {
                 </div>
             </section>
         }
-    }
+    })
 }
 
 // --- reviews and stock alerts

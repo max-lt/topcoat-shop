@@ -5,8 +5,8 @@
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{page, path_param, route};
-use topcoat::runtime::{procedure, shard};
-use topcoat::view::{component, view};
+use topcoat::runtime::{procedure, shard, signal};
+use topcoat::view::{component, view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_user, pool};
@@ -22,7 +22,7 @@ const STEPS: [(&str, &str); 4] = [
 
 /// The one place an order status becomes a colour and a word.
 #[component]
-pub async fn status_badge(status: String) -> Result {
+pub async fn status_badge(status: String) -> Result<impl View> {
     let (label, classes) = match status.as_str() {
         "paid" => ("Payée", "bg-oat-200 text-oat-800"),
         "packing" => ("En préparation", "bg-gin-100 text-gin-800"),
@@ -30,9 +30,9 @@ pub async fn status_badge(status: String) -> Result {
         "cancelled" => ("Annulée", "bg-brique-100 text-brique-700"),
         _ => ("Livrée", "bg-gin-700 text-oat-50"),
     };
-    view! {
+    Ok(view! {
         <span class=("rounded-full px-3 py-1 text-xs font-medium ".to_string() + classes)>(label)</span>
-    }
+    })
 }
 
 /// The ladder as a rung number: paid, packing, shipped, delivered, and
@@ -55,14 +55,14 @@ async fn advance(cx: &Cx, reference: String) -> Result<f64> {
 }
 
 #[shard]
-async fn tracking(cx: &Cx, reference: String, version: f64) -> Result {
+async fn tracking(cx: &Cx, reference: String, version: f64) -> Result<impl View> {
     let _ = version;
     let user = current_user(cx).await?.ok_or_unauthorized()?;
     let (order, _, steps) =
         db::order(pool(cx), user.id, &reference).await?.ok_or_not_found()?;
-    let reached: Vec<&str> = steps.iter().map(|s| s.step.as_str()).collect();
+    let reached: Vec<String> = steps.iter().map(|s| s.step.clone()).collect();
 
-    view! {
+    Ok(view! {
         <div class="flex items-center gap-3">
             <span class="text-sm font-medium">"Statut"</span>
             status_badge(status: order.status.clone())
@@ -77,12 +77,12 @@ async fn tracking(cx: &Cx, reference: String, version: f64) -> Result {
                     if rank + 1 < STEPS.len() {
                         <span class="absolute -left-[31.5px] top-2 h-[calc(100%+2rem)] w-px bg-oat-200"></span>
                     }
-                    <span class=(if reached.contains(&key) {
+                    <span class=(if reached.iter().any(|s| s == key) {
                         "absolute -left-9 top-2 h-2.5 w-2.5 rounded-full bg-gin-700 ring-4 ring-oat-50"
                     } else {
                         "absolute -left-9 top-2 h-2.5 w-2.5 rounded-full bg-oat-300 ring-4 ring-oat-50"
                     })></span>
-                    <p class=(if reached.contains(&key) { "font-medium" } else { "font-medium text-oat-400" })>(label)</p>
+                    <p class=(if reached.iter().any(|s| s == key) { "font-medium" } else { "font-medium text-oat-400" })>(label)</p>
                     for s in steps.iter().filter(|s| s.step == key) {
                         <p class=("mt-1 text-sm ".to_string() + SOFT)>(&s.note)</p>
                         <time class=("text-xs ".to_string() + MUTED)>(s.at.get(..16).unwrap_or_default().replace('T', " à "))</time>
@@ -98,13 +98,13 @@ async fn tracking(cx: &Cx, reference: String, version: f64) -> Result {
                 <time class="mt-1 block text-xs text-brique-500">(s.at.get(..16).unwrap_or_default().replace('T', " à "))</time>
             </div>
         }
-    }
+    })
 }
 
 path_param!(reference);
 
 #[page("/commande/{reference}")]
-async fn order_page(cx: &Cx) -> Result {
+async fn order_page(cx: &Cx) -> Result<impl View> {
     let reference = path_param::<Reference>(cx).to_string();
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let (order, lines, _) =
@@ -120,11 +120,11 @@ async fn order_page(cx: &Cx) -> Result {
     let subtotal = order.total_cents - order.shipping_cents;
     let free = order.shipping_cents == 0;
 
-    view! {
-        signal reference_sig = page_reference;
-        signal version = 0.0;
-        signal step = at;
+    let reference_sig = signal(cx, || page_reference);
+    let version = signal(cx, || 0.0);
+    let step = signal(cx, || at);
 
+    Ok(view! {
         <div class="relative overflow-hidden rounded-3xl bg-gin-900 px-8 py-16 text-center text-gin-50">
             // The couriers on the march, blurred behind a green veil: the
             // banner keeps its original compact height.
@@ -212,7 +212,7 @@ async fn order_page(cx: &Cx) -> Result {
                 <a href="/compte" class=(BTN_OUTLINE.to_string() + " w-full")>"Toutes mes commandes"</a>
             </aside>
         </div>
-    }
+    })
 }
 
 /// A plain POST with a redirect: the page reloads on the cancelled state.

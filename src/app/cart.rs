@@ -1,13 +1,13 @@
-//! Cart and checkout. The rows and their steppers are rendered by the page,
-//! because only there can a handler reach the signal that refreshes the
-//! bill; the bill itself is a shard, so every total is the server's opinion
-//! and never the browser's arithmetic.
+//! Cart and checkout. Each row is a component that owns its own signals and
+//! takes the page's `version` signal, which its steppers bump; the bill is a
+//! shard that reads `version`, so every total is the server's opinion and
+//! never the browser's arithmetic.
 
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{content::Form, page, query_params, route};
-use topcoat::runtime::{procedure, shard};
-use topcoat::view::view;
+use topcoat::runtime::{procedure, shard, signal, Signal};
+use topcoat::view::{component, view, View, ViewExt};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, forget_cart, pool};
@@ -30,7 +30,7 @@ async fn remove(cx: &Cx, sku: String, size: String) -> Result<f64> {
 /// The bill: line totals, shipping, and what it all comes to. `version` is
 /// the signal the steppers bump; `mode` is the shipping choice.
 #[shard]
-async fn bill(cx: &Cx, version: f64, mode: String) -> Result {
+async fn bill(cx: &Cx, version: f64, mode: String) -> Result<impl View> {
     let _ = version;
     let cart_id = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &cart_id).await?;
@@ -40,7 +40,7 @@ async fn bill(cx: &Cx, version: f64, mode: String) -> Result {
     let missing = db::FREE_SHIPPING_CENTS - subtotal;
     let empty = lines.is_empty();
 
-    view! {
+    Ok(view! {
         if empty {
             <p class=("text-sm ".to_string() + MUTED)>"Rien à additionner pour l'instant."</p>
         } else {
@@ -89,7 +89,7 @@ async fn bill(cx: &Cx, version: f64, mode: String) -> Result {
                 </div>
             }
         }
-    }
+    })
 }
 
 #[query_params(error = bad_request)]
@@ -98,18 +98,104 @@ struct CartState {
     clamped: Option<String>,
 }
 
+/// One cart row: the photo, the name, and the stepper. The row owns the
+/// signals its own handlers capture, and takes `version` from the page so
+/// that a change to the quantity refreshes the bill.
+#[component]
+async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<impl View> {
+    let line_sku = signal(cx, || l.sku.clone());
+    let line_size = signal(cx, || l.size.clone());
+    let q = signal(cx, || l.quantity as f64);
+    let blocked = signal(cx, || 0.0);
+    let line_stock = signal(cx, || l.stock as f64);
+
+    Ok(view! {
+        <li id=(format!("line-{}-{}", &l.sku, &l.size)) class="flex gap-5 py-6">
+            <a href=("/produit/".to_string() + &l.sku)
+               data-bg=(crate::images::background(&l.sku))
+               class="block h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200">
+                <img src=(crate::images::url(&l.sku, 400))
+                     alt=(&l.name)
+                     loading="lazy"
+                     class="h-full w-full object-cover">
+            </a>
+
+            <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <a href=("/produit/".to_string() + &l.sku) class="text-lg transition hover:text-gin-700">(&l.name)</a>
+                    <span class="text-sm tabular-nums">(format_price(l.price_cents)) " l'unité"</span>
+                </div>
+                if !l.size.is_empty() {
+                    <p class=("mt-1 text-sm ".to_string() + MUTED)>"Taille " (&l.size)</p>
+                }
+
+                <div class="mt-4 flex items-center gap-4">
+                    <div class="relative">
+                        // The server clamps to the stock; when + changes
+                        // nothing, this bubble says why instead of letting
+                        // the counter freeze in silence.
+                        <span class="animate-bulle pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
+                              :hidden=$(blocked.get() == 0.0)>
+                            "Il n'y en a que " $(q.get()) " en stock."
+                        </span>
+                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300">
+                            <button aria-label="Diminuer la quantité"
+                                    :class=$(if q.get() <= 0.0 {
+                                        "flex h-9 w-9 select-none items-center justify-center rounded-l-full text-oat-300"
+                                    } else {
+                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-l-full transition hover:bg-oat-100"
+                                    })
+                                    @click=$(async |_e| {
+                                        // Down to zero included: the server retires the
+                                        // line there, and asking again changes nothing.
+                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() - 1.0).await;
+                                        blocked.set(0.0);
+                                        q.set(n);
+                                        version.increment();
+                                    })>"−"</button>
+                            <span class="w-8 text-center text-sm tabular-nums">$(q.get())</span>
+                            <button aria-label="Augmenter la quantité"
+                                    :class=$(if q.get() >= line_stock.get() {
+                                        "flex h-9 w-9 select-none items-center justify-center rounded-r-full text-oat-300"
+                                    } else {
+                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-r-full transition hover:bg-oat-100"
+                                    })
+                                    @click=$(async |_e| {
+                                        // Hidden during the round-trip: the reveal
+                                        // restarts the fade-out animation each time.
+                                        blocked.set(0.0);
+                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() + 1.0).await;
+                                        blocked.set(if n == q.get() { 1.0 } else { 0.0 });
+                                        q.set(n);
+                                        version.increment();
+                                    })>"+"</button>
+                        </div>
+                    </div>
+                    <button class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)
+                            @click=$(async |_e| {
+                                remove(line_sku.get(), line_size.get()).await;
+                                blocked.set(0.0);
+                                q.set(0.0);
+                                version.increment();
+                            })>"Retirer"</button>
+                </div>
+            </div>
+        </li>
+    })
+}
+
 #[page("/panier")]
-async fn cart(cx: &Cx) -> Result {
+async fn cart(cx: &Cx) -> Result<impl View> {
     let clamped = query_params::<CartState>(cx)?.clamped.is_some();
     let id = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &id).await?;
     let signed_in = current_user(cx).await?.is_some();
     let empty = lines.is_empty();
 
-    view! {
-        signal version = 0.0;
-        signal standard = "standard".to_string();
+    let version = signal(cx, || 0.0);
+    let standard = signal(cx, || "standard".to_string());
 
+    Ok(view! {
         page_heading(eyebrow: "Panier", title: "Votre sélection", lede: "")
 
         if clamped {
@@ -129,84 +215,12 @@ async fn cart(cx: &Cx) -> Result {
             <div class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
                 <ul class="divide-y divide-oat-200 border-y border-oat-200">
                     for l in lines {
-                        // One signal per line: what a handler may capture.
-                        signal line_sku = l.sku.clone();
-                        signal line_size = l.size.clone();
-                        signal q = l.quantity as f64;
-                        signal blocked = 0.0;
-                        signal line_stock = l.stock as f64;
 
-                        <li class="flex gap-5 py-6">
-                            <a href=("/produit/".to_string() + &l.sku)
-                               data-bg=(crate::images::background(&l.sku))
-                               class="block h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200">
-                                <img src=(crate::images::url(&l.sku, 400))
-                                     alt=(&l.name)
-                                     loading="lazy"
-                                     class="h-full w-full object-cover">
-                            </a>
-
-                            <div class="min-w-0 flex-1">
-                                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                    <a href=("/produit/".to_string() + &l.sku) class="text-lg transition hover:text-gin-700">(&l.name)</a>
-                                    <span class="text-sm tabular-nums">(format_price(l.price_cents)) " l'unité"</span>
-                                </div>
-                                if !l.size.is_empty() {
-                                    <p class=("mt-1 text-sm ".to_string() + MUTED)>"Taille " (&l.size)</p>
-                                }
-
-                                <div class="mt-4 flex items-center gap-4">
-                                    <div class="relative">
-                                        // The server clamps to the stock; when + changes
-                                        // nothing, this bubble says why instead of letting
-                                        // the counter freeze in silence.
-                                        <span class="animate-bulle pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
-                                              :hidden=$(blocked.get() == 0.0)>
-                                            "Il n'y en a que " $(q.get()) " en stock."
-                                        </span>
-                                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300">
-                                            <button aria-label="Diminuer la quantité"
-                                                    :class=$(if q.get() <= 0.0 {
-                                                        "flex h-9 w-9 select-none items-center justify-center rounded-l-full text-oat-300"
-                                                    } else {
-                                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-l-full transition hover:bg-oat-100"
-                                                    })
-                                                    @click=$(async |_e| {
-                                                        // Down to zero included: the server retires the
-                                                        // line there, and asking again changes nothing.
-                                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() - 1.0).await;
-                                                        blocked.set(0.0);
-                                                        q.set(n);
-                                                        version.increment();
-                                                    })>"−"</button>
-                                            <span class="w-8 text-center text-sm tabular-nums">$(q.get())</span>
-                                            <button aria-label="Augmenter la quantité"
-                                                    :class=$(if q.get() >= line_stock.get() {
-                                                        "flex h-9 w-9 select-none items-center justify-center rounded-r-full text-oat-300"
-                                                    } else {
-                                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-r-full transition hover:bg-oat-100"
-                                                    })
-                                                    @click=$(async |_e| {
-                                                        // Hidden during the round-trip: the reveal
-                                                        // restarts the fade-out animation each time.
-                                                        blocked.set(0.0);
-                                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() + 1.0).await;
-                                                        blocked.set(if n == q.get() { 1.0 } else { 0.0 });
-                                                        q.set(n);
-                                                        version.increment();
-                                                    })>"+"</button>
-                                        </div>
-                                    </div>
-                                    <button class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)
-                                            @click=$(async |_e| {
-                                                remove(line_sku.get(), line_size.get()).await;
-                                                blocked.set(0.0);
-                                                q.set(0.0);
-                                                version.increment();
-                                            })>"Retirer"</button>
-                                </div>
-                            </div>
-                        </li>
+                        cart_line(
+                            key: format!("{}-{}", &l.sku, &l.size),
+                            l: l,
+                            version: version.clone(),
+                        )
                     }
                 </ul>
 
@@ -228,13 +242,13 @@ async fn cart(cx: &Cx) -> Result {
                 </aside>
             </div>
         }
-    }
+    })
 }
 
 // --- checkout
 
 #[page("/commander")]
-async fn checkout(cx: &Cx) -> Result {
+async fn checkout(cx: &Cx) -> Result<impl View> {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let id = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &id).await?;
@@ -242,17 +256,17 @@ async fn checkout(cx: &Cx) -> Result {
     let has_book = !addresses.is_empty();
 
     if lines.is_empty() {
-        return view! {
+        return Ok(view! {
             page_heading(eyebrow: "Commande", title: "Rien à commander", lede: "Votre panier est vide.")
             <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la collection"</a>
-        };
+        }.boxed());
     }
 
-    view! {
-        signal mode = "standard".to_string();
-        signal standard = "standard".to_string();
-        signal express = "express".to_string();
+    let mode = signal(cx, || "standard".to_string());
+    let standard = signal(cx, || "standard".to_string());
+    let express = signal(cx, || "express".to_string());
 
+    Ok(view! {
         page_heading(
             eyebrow: "Commande",
             title: "Livraison et paiement",
@@ -357,7 +371,7 @@ async fn checkout(cx: &Cx) -> Result {
                 </div>
             </aside>
         </form>
-    }
+    }.boxed())
 }
 
 #[derive(serde::Deserialize)]

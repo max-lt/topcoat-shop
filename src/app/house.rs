@@ -1,9 +1,10 @@
 //! The pages a real shop owes its visitors: who we are, how to reach us,
 //! shipping and returns, sizes, and the legal small print.
 
+use topcoat::context::Cx;
 use topcoat::router::page;
-use topcoat::runtime::Event;
-use topcoat::view::view;
+use topcoat::runtime::{signal, Event};
+use topcoat::view::{view, View};
 use topcoat::Result;
 
 use crate::app::{page_heading, BTN, CARD, EYEBROW, FIELD, MUTED, SOFT};
@@ -17,8 +18,8 @@ const CREW: [(&str, &str, &str); 3] = [
 ];
 
 #[page("/maison")]
-async fn house() -> Result {
-    view! {
+async fn house() -> Result<impl View> {
+    Ok(view! {
         <div class="max-w-3xl">
             page_heading(
                 eyebrow: "La maison",
@@ -70,7 +71,7 @@ async fn house() -> Result {
                 }
             </div>
         </section>
-    }
+    })
 }
 
 // --- help
@@ -107,8 +108,8 @@ const SIZES: [(&str, &str, &str, &str); 4] = [
 ];
 
 #[page("/aide")]
-async fn help() -> Result {
-    view! {
+async fn help() -> Result<impl View> {
+    Ok(view! {
         <div class="max-w-3xl">
             page_heading(
                 eyebrow: "Aide",
@@ -160,20 +161,20 @@ async fn help() -> Result {
                 </div>
             </section>
         </div>
-    }
+    })
 }
 
 // --- contact
 
 #[page("/contact")]
-async fn contact() -> Result {
-    view! {
-        signal name = String::new();
-        signal email = String::new();
-        signal message = String::new();
-        signal sent = false;
-        signal blank = String::new();
+async fn contact(cx: &Cx) -> Result<impl View> {
+    let name = signal(cx, String::new);
+    let email = signal(cx, String::new);
+    let message = signal(cx, String::new);
+    let sent = signal(cx, || false);
+    let blank = signal(cx, String::new);
 
+    Ok(view! {
         <div class="grid gap-14 lg:grid-cols-2">
             <div>
                 page_heading(
@@ -238,13 +239,13 @@ async fn contact() -> Result {
                 </div>
             </div>
         </div>
-    }
+    })
 }
 
 // --- legal
 
 #[page("/cgv")]
-async fn terms() -> Result {
+async fn terms() -> Result<impl View> {
     let articles = [
         ("Objet", "Les présentes conditions régissent les ventes conclues sur bernard.sh. \
                    Cette boutique est une démonstration : aucune commande n'est expédiée et \
@@ -263,7 +264,7 @@ async fn terms() -> Result {
                      d'empreinte argon2id."),
     ];
 
-    view! {
+    Ok(view! {
         <div class="max-w-2xl">
             page_heading(eyebrow: "Légal", title: "Conditions générales de vente", lede: "")
             <div class="mt-12 space-y-10">
@@ -275,12 +276,12 @@ async fn terms() -> Result {
                 }
             </div>
         </div>
-    }
+    })
 }
 
 #[page("/mentions-legales")]
-async fn legal() -> Result {
-    view! {
+async fn legal() -> Result<impl View> {
+    Ok(view! {
         <div class="max-w-2xl">
             page_heading(eyebrow: "Légal", title: "Mentions légales", lede: "")
             <dl class=("mt-12 space-y-8 leading-relaxed ".to_string() + SOFT)>
@@ -316,5 +317,5 @@ async fn legal() -> Result {
             </dl>
             <p class=("mt-12 text-sm ".to_string() + EYEBROW)>"Boutique de démonstration"</p>
         </div>
-    }
+    })
 }

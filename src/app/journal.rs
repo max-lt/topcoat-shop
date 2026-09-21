@@ -4,7 +4,7 @@
 use topcoat::context::Cx;
 use topcoat::router::error::RouterErrorExt;
 use topcoat::router::{page, path_param};
-use topcoat::view::view;
+use topcoat::view::{view, View};
 use topcoat::Result;
 
 use crate::app::{page_heading, BTN_OUTLINE, EYEBROW, MUTED, SOFT};
@@ -49,8 +49,8 @@ pub fn photo_key(tag: &str) -> &'static str {
 }
 
 #[page("/journal")]
-async fn journal() -> Result {
-    view! {
+async fn journal() -> Result<impl View> {
+    Ok(view! {
         page_heading(
             eyebrow: "Journal",
             title: "Ce qu'on choisit, et pourquoi",
@@ -80,18 +80,18 @@ async fn journal() -> Result {
                 </a>
             }
         </div>
-    }
+    })
 }
 
 path_param!(slug);
 
 #[page("/journal/{slug}")]
-async fn post(cx: &Cx) -> Result {
+async fn post(cx: &Cx) -> Result<impl View> {
     let slug = path_param::<Slug>(cx).to_string();
     let (_, date, tag, title, lede) = POSTS.iter().find(|(s, ..)| *s == slug).ok_or_not_found()?;
     let body = body(&slug).ok_or_not_found()?;
 
-    view! {
+    Ok(view! {
         <article class="mx-auto max-w-2xl">
             <div class="flex items-center gap-3">
                 <span class=(BADGE)>(tag)</span>
@@ -139,7 +139,7 @@ async fn post(cx: &Cx) -> Result {
                 <a href="/journal" class="text-sm text-gin-700 underline underline-offset-4">"← Tous les billets"</a>
             </p>
         </article>
-    }
+    })
 }
 
 fn body(slug: &str) -> Option<Vec<&'static str>> {

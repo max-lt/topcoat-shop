@@ -7,9 +7,9 @@ use serde::Serialize;
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, NotFoundError, SeeOther};
 use topcoat::router::request::uri;
-use topcoat::router::{content::Form, href, layout, page, query_params, route, StatusCode};
-use topcoat::runtime::{shard, Event};
-use topcoat::view::{component, view};
+use topcoat::router::{content::Form, href, layout, page, query_params, route, Slot, StatusCode};
+use topcoat::runtime::{shard, signal, Event};
+use topcoat::view::{component, error_boundary, view, View};
 use topcoat::Result;
 
 use crate::db::{self, format_price, Product};
@@ -43,23 +43,23 @@ pub const SOFT: &str = "text-oat-700";
 pub const MUTED: &str = "text-oat-600";
 
 #[component]
-pub async fn page_heading(eyebrow: &str, title: &str, lede: &str) -> Result {
-    view! {
+pub async fn page_heading(eyebrow: &str, title: &str, lede: &str) -> Result<impl View> {
+    Ok(view! {
         <p class=(EYEBROW)>(eyebrow)</p>
         <h1 class="mt-3 text-4xl leading-[1.05] sm:text-5xl">(title)</h1>
         if !lede.is_empty() {
             <p class=("mt-4 max-w-2xl text-lg leading-relaxed ".to_string() + SOFT)>(lede)</p>
         }
-    }
+    })
 }
 
 /// The product tile, used on the home page, the catalog and the related
 /// shelf, so a product looks the same everywhere it appears.
 #[component]
-pub async fn product_tile(p: Product) -> Result {
+pub async fn product_tile(p: Product) -> Result<impl View> {
     let sold_out = p.sold_out();
     let is_new = p.is_new != 0;
-    view! {
+    Ok(view! {
         <a href=("/produit/".to_string() + &p.sku) class="group block transition duration-300 hover:-translate-y-1">
             <div class="relative aspect-square overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 group-hover:shadow-xl group-hover:shadow-oat-900/10 group-hover:ring-gin-300"
                  data-vt=(&p.sku)
@@ -85,7 +85,7 @@ pub async fn product_tile(p: Product) -> Result {
             </div>
             <p class=("mt-1 text-sm ".to_string() + MUTED)>(&p.category)</p>
         </a>
-    }
+    })
 }
 
 // --- shell
@@ -148,15 +148,15 @@ async fn page_title(cx: &Cx) -> Result<String> {
 
 #[cfg(feature = "native")]
 #[component]
-async fn head_assets() -> Result {
+async fn head_assets() -> Result<impl View> {
     use crate::design::{SANS, SERIF};
-    view! {
+    Ok(view! {
         topcoat::font::link(font: SERIF)
         topcoat::font::link(font: SANS)
         <link rel="stylesheet" href=(topcoat::tailwind::stylesheet!())>
         topcoat::runtime::script()
         topcoat::dev::script()
-    }
+    })
 }
 
 /// The same files under the fixed names of `crate::bundle`. Fontsource
@@ -164,12 +164,12 @@ async fn head_assets() -> Result {
 /// the edge cannot call the macros that name them.
 #[cfg(feature = "edge")]
 #[component]
-async fn head_assets() -> Result {
+async fn head_assets() -> Result<impl View> {
     use crate::bundle::{SCRIPT, STYLESHEET};
-    view! {
+    Ok(view! {
         <link rel="stylesheet" href=(STYLESHEET)>
         <script type="module" src=(SCRIPT)></script>
-    }
+    })
 }
 
 // A URL no route matches answers a bare 404 without it, outside the shell
@@ -184,14 +184,14 @@ struct Term<'a> {
 /// The header's panel, re-rendered by the server on every keystroke. It
 /// draws its own box, so an empty field leaves nothing behind.
 #[shard]
-async fn suggestions(cx: &Cx, term: String) -> Result {
+async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
     let term = term.trim().to_string();
     let found = if term.is_empty() { Vec::new() } else { db::search(pool(cx), &term).await? };
     let how_many = found.len();
     let shown: Vec<Product> = found.into_iter().take(5).collect();
     let nothing = !term.is_empty() && shown.is_empty();
 
-    view! {
+    Ok(view! {
         if !term.is_empty() {
             <div class="animate-apparition rounded-2xl bg-white p-2 shadow-lg ring-1 ring-oat-200">
                 if nothing {
@@ -213,11 +213,11 @@ async fn suggestions(cx: &Cx, term: String) -> Result {
                 }
             </div>
         }
-    }
+    })
 }
 
 #[layout("/")]
-async fn shell(cx: &Cx, slot: Result) -> Result {
+async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     let visitor = current_user(cx).await?;
     let signed_in = visitor.is_some();
     let is_admin = visitor.as_ref().is_some_and(|u| u.admin != 0);
@@ -242,23 +242,12 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
     };
     let og_url = format!("{origin}{path}");
 
-    let content = match slot {
-        Err(error) if error.downcast_ref::<NotFoundError>().is_some() => view! {
-            (StatusCode::NOT_FOUND)
-            <section class="mx-auto max-w-xl py-24 text-center">
-                <p class=(EYEBROW)>"Erreur 404"</p>
-                <h1 class="mt-4 text-5xl">"Coquille vide."</h1>
-                <p class=("mt-5 text-lg leading-relaxed ".to_string() + SOFT)>
-                    "Cette page n'existe pas, ou ne fait plus partie de la collection. \
-                     Le reste de la boutique vous attend."
-                </p>
-                <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la boutique"</a>
-            </section>
-        },
-        content => content,
-    }?;
+    let term = signal(cx, String::new);
+    // focusin/focusout rather than focus/blur: they bubble, so
+    // the panel survives a click on one of its own links.
+    let open = signal(cx, || 0.0);
 
-    view! {
+    Ok(view! {
         <!DOCTYPE html>
         <html lang="fr">
             <head>
@@ -323,10 +312,6 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                             }
                         </nav>
 
-                        signal term = String::new();
-                        // focusin/focusout rather than focus/blur: they bubble, so
-                        // the panel survives a click on one of its own links.
-                        signal open = 0.0;
 
                         // Still a real form: without JavaScript, Enter or the arrow
                         // opens /recherche, which searches on its own.
@@ -362,7 +347,30 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                     </div>
                 </header>
 
-                <main id="contenu" class="mx-auto max-w-6xl px-6 py-14">(content)</main>
+                <main id="contenu" class="mx-auto max-w-6xl px-6 py-14">
+                    // A 404 wears the shell like any other page; every other
+                    // error is rethrown for the router to answer.
+                    error_boundary(
+                        fallback: |error| {
+                            if error.downcast_ref::<NotFoundError>().is_none() {
+                                return Err(error);
+                            }
+                            Ok(view! {
+                                (StatusCode::NOT_FOUND)
+                                <section class="mx-auto max-w-xl py-24 text-center">
+                                    <p class=(EYEBROW)>"Erreur 404"</p>
+                                    <h1 class="mt-4 text-5xl">"Coquille vide."</h1>
+                                    <p class=("mt-5 text-lg leading-relaxed ".to_string() + SOFT)>
+                                        "Cette page n'existe pas, ou ne fait plus partie de la collection. \
+                                         Le reste de la boutique vous attend."
+                                    </p>
+                                    <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la boutique"</a>
+                                </section>
+                            })
+                        },
+                        (slot)
+                    )
+                </main>
 
                 <footer class="mt-10 border-t border-oat-200 bg-oat-100">
                     <div class="mx-auto max-w-6xl px-6 py-14">
@@ -415,7 +423,7 @@ async fn shell(cx: &Cx, slot: Result) -> Result {
                 </footer>
             </body>
         </html>
-    }
+    })
 }
 
 // --- home
@@ -448,14 +456,14 @@ async fn subscribe(cx: &Cx, Form(f): Form<Subscription>) -> Result<SeeOther> {
 }
 
 #[page("/")]
-async fn home(cx: &Cx) -> Result {
+async fn home(cx: &Cx) -> Result<impl View> {
     let featured = db::new_arrivals(pool(cx), 4).await?;
     let categories = db::categories(pool(cx)).await?;
     let letter = query_params::<NewsletterState>(cx)?.lettre.clone().unwrap_or_default();
     let thanks = letter == "merci";
     let invalid = letter == "invalide";
 
-    view! {
+    Ok(view! {
         <section class="grid items-center gap-12 lg:grid-cols-2">
             <div>
                 <p class=(EYEBROW)>"Collection de saison"</p>
@@ -590,5 +598,5 @@ async fn home(cx: &Cx) -> Result {
                 <a href="/journal" class=(BTN_OUTLINE.to_string() + " mt-8")>"Lire le journal"</a>
             </div>
         </section>
-    }
+    })
 }
