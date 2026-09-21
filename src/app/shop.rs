@@ -80,27 +80,33 @@ async fn shop(cx: &Cx) -> Result<impl View> {
     let link = |cat: &str, s: i64| format!("/boutique?categorie={cat}&tri={s}");
 
     Ok(view! {
-        page_heading(
-            eyebrow: "La boutique",
-            title: shelf_title,
-            lede: shelf_lede
-        )
+        page_heading(eyebrow: "La boutique", title: shelf_title, lede: shelf_lede)
 
-        <div class="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-y border-oat-200 py-4">
+        <div
+            class="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-y border-oat-200 py-4"
+        >
             <div class="flex flex-wrap items-center gap-2">
-                <a href=(link("", sort))
-                   class=(if category.is_empty() {
-                       "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
-                   } else {
-                       "rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
-                   })>"Tout"</a>
+                <a
+                    href=(link("", sort))
+                    class=(if category.is_empty() {
+                        "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
+                    } else {
+                        "rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
+                    })
+                >
+                    "Tout"
+                </a>
                 for c in categories {
-                    <a href=(link(&c, sort))
-                       class=(if category == c {
-                           "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
-                       } else {
-                           "rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
-                       })>(&c)</a>
+                    <a
+                        href=(link(&c, sort))
+                        class=(if category == c {
+                            "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
+                        } else {
+                            "rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
+                        })
+                    >
+                        (&c)
+                    </a>
                 }
             </div>
 
@@ -108,12 +114,16 @@ async fn shop(cx: &Cx) -> Result<impl View> {
                 <span class=(MUTED)>"Trier par"</span>
                 <div class="flex flex-wrap gap-3">
                     for (value, label) in SORTS {
-                        <a href=(link(&category, value))
-                           class=(if sort == value {
-                               "text-gin-700 underline underline-offset-4"
-                           } else {
-                               "text-oat-600 transition hover:text-gin-700"
-                           })>(label)</a>
+                        <a
+                            href=(link(&category, value))
+                            class=(if sort == value {
+                                "text-gin-700 underline underline-offset-4"
+                            } else {
+                                "text-oat-600 transition hover:text-gin-700"
+                            })
+                        >
+                            (label)
+                        </a>
                     }
                 </div>
             </div>
@@ -161,21 +171,32 @@ async fn results(cx: &Cx, term: String) -> Result<impl View> {
     Ok(view! {
         if nothing {
             <div class="py-16 text-center">
-                <p class="font-display text-3xl">"Rien pour « " (&term) " »"</p>
+                <p class="font-display text-3xl">
+                    "Rien pour « "
+                    (&term)
+                    " »"
+                </p>
                 <p class=("mt-3 ".to_string() + SOFT)>
                     "Essayez « coton », « laiton », « papier », ou parcourez toute la collection."
                 </p>
-                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-8")>"Voir la boutique"</a>
+                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-8")>
+                    "Voir la boutique"
+                </a>
             </div>
         } else {
             <p class=("text-sm ".to_string() + MUTED)>
                 if searching {
-                    (format!("{how_many} résultat{}", if how_many > 1 { "s" } else { "" }))
+                    (format!(
+                        "{how_many} résultat{}",
+                        if how_many > 1 { "s" } else { "" },
+                    ))
                 } else {
                     "Une sélection pour commencer"
                 }
             </p>
-            <div class="animate-apparition mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+                class="animate-apparition mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3"
+            >
                 for p in products {
                     product_tile(p: p)
                 }
@@ -200,15 +221,19 @@ async fn search(cx: &Cx) -> Result<impl View> {
         // Still a real form: without JavaScript, Enter submits and the page
         // re-renders from the query string.
         <form action="/recherche" method="get" class="mt-8 max-w-xl">
-            <input name="q" type="search" autofocus="autofocus" autocomplete="off"
-                   placeholder="coton, laiton, affiche…" class=(FIELD)
-                   :value=$(term.get())
-                   @input=$(|e: Event| term.set(e.target.value))>
+            <input
+                name="q"
+                type="search"
+                autofocus="autofocus"
+                autocomplete="off"
+                placeholder="coton, laiton, affiche…"
+                class=(FIELD)
+                :value=$(term.get())
+                @input=$(|e: Event| term.set(e.target.value))
+            >
         </form>
 
-        <div class="mt-10">
-            results(term: $(term.get()))
-        </div>
+        <div class="mt-10">results(term: $(term.get()))</div>
     })
 }
 
@@ -259,9 +284,16 @@ async fn size_option(
                     size.set(label.get());
                     size_stock.set(option_stock.get());
                     held_qty.set(in_cart(sku_sig.get(), label.get()).await);
-                })>(&v.size)</button>
+                })
+            >
+                (&v.size)
+            </button>
         } else {
-            <span class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200">(&v.size)</span>
+            <span
+                class="min-w-14 rounded-xl px-4 py-2.5 text-center text-sm text-oat-400 line-through ring-1 ring-oat-200"
+            >
+                (&v.size)
+            </span>
         }
     })
 }
@@ -334,11 +366,18 @@ async fn product(cx: &Cx) -> Result<impl View> {
             <nav class=("text-sm ".to_string() + MUTED)>
                 <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
                 " / "
-                <a href=("/boutique?categorie=".to_string() + &p.category) class="transition hover:text-gin-700">(&p.category)</a>
+                <a
+                    href=("/boutique?categorie=".to_string() + &p.category)
+                    class="transition hover:text-gin-700"
+                >
+                    (&p.category)
+                </a>
             </nav>
             // The bridge the shopkeeper crosses; nobody else sees it.
             if is_admin {
-                <a href=("/admin/produit/".to_string() + &p.sku) class=(BTN_OUTLINE)>"Éditer"</a>
+                <a href=("/admin/produit/".to_string() + &p.sku) class=(BTN_OUTLINE)>
+                    "Éditer"
+                </a>
             }
         </div>
 
@@ -346,23 +385,33 @@ async fn product(cx: &Cx) -> Result<impl View> {
             // data-vt plus a static CSS attr() rule carries the morph name: a
             // dynamic style= attribute silently kills hydration of everything
             // after it (topcoat-view 0.5 bug, bisected down to the one line).
-            <div class="relative aspect-square overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
-                 data-vt=(&p.sku)
-                 data-bg=(crate::images::background(&p.sku))>
+            <div
+                class="relative aspect-square overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
+                data-vt=(&p.sku)
+                data-bg=(crate::images::background(&p.sku))
+            >
                 // The 400 px tile the visitor just clicked is already in the
                 // browser cache: blurred underneath, it bridges the wait -- a
                 // loading <img> paints nothing, so the small one shows through
                 // until the big one covers it.
-                <img src=(crate::images::url(&p.sku, 400))
-                     alt=""
-                     aria-hidden="true"
-                     class="absolute inset-0 h-full w-full scale-105 object-cover blur-sm">
-                <img src=(crate::images::url(&p.sku, 900))
-                     srcset=(format!("{} 900w, {} 1600w", crate::images::url(&p.sku, 900), crate::images::url(&p.sku, 1600)))
-                     sizes="(min-width: 1024px) 50vw, 100vw"
-                     alt=(&p.name)
-                     fetchpriority="high"
-                     class="relative h-full w-full object-cover">
+                <img
+                    src=(crate::images::url(&p.sku, 400))
+                    alt=""
+                    aria-hidden="true"
+                    class="absolute inset-0 h-full w-full scale-105 object-cover blur-sm"
+                >
+                <img
+                    src=(crate::images::url(&p.sku, 900))
+                    srcset=(format!(
+                        "{} 900w, {} 1600w",
+                        crate::images::url(&p.sku, 900),
+                        crate::images::url(&p.sku, 1600),
+                    ))
+                    sizes="(min-width: 1024px) 50vw, 100vw"
+                    alt=(&p.name)
+                    fetchpriority="high"
+                    class="relative h-full w-full object-cover"
+                >
             </div>
 
             <div class="lg:pt-6">
@@ -385,19 +434,38 @@ async fn product(cx: &Cx) -> Result<impl View> {
                 </dl>
 
                 if sold_out {
-                    <p class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">
+                    <p
+                        class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+                    >
                         "Épuisé pour le moment. La prochaine série arrive avec la marée."
                     </p>
                     if alert_thanks {
-                        <p class="animate-apparition mt-4 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800" id="dispo">
+                        <p
+                            class="animate-apparition mt-4 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
+                            id="dispo"
+                        >
                             "C'est noté — un mot dès que la marée le ramène."
                         </p>
                     } else {
-                        <form method="post" action="/alerte" class="mt-4 flex flex-wrap items-center gap-2" id="dispo">
+                        <form
+                            method="post"
+                            action="/alerte"
+                            class="mt-4 flex flex-wrap items-center gap-2"
+                            id="dispo"
+                        >
                             <input type="hidden" name="sku" value=(&p.sku)>
                             <input type="hidden" name="size" value="">
-                            <input class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300" type="email" name="email" required="required" placeholder="vous@exemple.fr" aria-label="Votre email">
-                            <button class=(BTN_OUTLINE)>"Me prévenir du retour"</button>
+                            <input
+                                class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300"
+                                type="email"
+                                name="email"
+                                required="required"
+                                placeholder="vous@exemple.fr"
+                                aria-label="Votre email"
+                            >
+                            <button class=(BTN_OUTLINE)>
+                                "Me prévenir du retour"
+                            </button>
                         </form>
                     }
                 } else {
@@ -405,39 +473,66 @@ async fn product(cx: &Cx) -> Result<impl View> {
                         <div class="mt-8">
                             <div class="flex items-baseline justify-between">
                                 <p class="text-sm font-medium">"Taille"</p>
-                                <a href="/aide#tailles" class=("text-sm underline underline-offset-4 ".to_string() + MUTED)>"Guide des tailles"</a>
+                                <a
+                                    href="/aide#tailles"
+                                    class=("text-sm underline underline-offset-4 ".to_string()
+                                        + MUTED)
+                                >
+                                    "Guide des tailles"
+                                </a>
                             </div>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 for v in variants.iter().filter(|v| !v.size.is_empty()) {
-                                size_option(
-                                    key: &v.size,
-                                    v: v.clone(),
-                                    sku_sig: sku_sig.clone(),
-                                    size: size.clone(),
-                                    size_stock: size_stock.clone(),
-                                    held_qty: held_qty.clone(),
-                                )
+                                    size_option(
+                                        key: &v.size,
+                                        v: v.clone(),
+                                        sku_sig: sku_sig.clone(),
+                                        size: size.clone(),
+                                        size_stock: size_stock.clone(),
+                                        held_qty: held_qty.clone()
+                                    )
                                 }
                             </div>
 
                             if has_missing {
                                 if alert_thanks {
-                                    <p class="animate-apparition mt-3 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800" id="dispo">
+                                    <p
+                                        class="animate-apparition mt-3 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
+                                        id="dispo"
+                                    >
                                         "C'est noté — un mot dès que la taille revient."
                                     </p>
                                 } else {
                                     <details class="mt-3" id="dispo">
-                                        <summary class=("text-sm underline underline-offset-4 ".to_string() + MUTED)>
+                                        <summary
+                                            class=("text-sm underline underline-offset-4 ".to_string()
+                                                + MUTED)
+                                        >
                                             "Votre taille manque ? On vous prévient dès son retour."
                                         </summary>
-                                        <form method="post" action="/alerte" class="mt-3 flex flex-wrap items-center gap-2">
+                                        <form
+                                            method="post"
+                                            action="/alerte"
+                                            class="mt-3 flex flex-wrap items-center gap-2"
+                                        >
                                             <input type="hidden" name="sku" value=(&p.sku)>
-                                            <select name="size" class="rounded-xl bg-white px-3 py-2.5 text-sm ring-1 ring-oat-300" aria-label="Taille épuisée">
+                                            <select
+                                                name="size"
+                                                class="rounded-xl bg-white px-3 py-2.5 text-sm ring-1 ring-oat-300"
+                                                aria-label="Taille épuisée"
+                                            >
                                                 for s in &missing {
                                                     <option value=(s)>(s)</option>
                                                 }
                                             </select>
-                                            <input class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300" type="email" name="email" required="required" placeholder="vous@exemple.fr" aria-label="Votre email">
+                                            <input
+                                                class="w-60 rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1 ring-oat-300"
+                                                type="email"
+                                                name="email"
+                                                required="required"
+                                                placeholder="vous@exemple.fr"
+                                                aria-label="Votre email"
+                                            >
                                             <button class=(BTN_OUTLINE)>"Me prévenir"</button>
                                         </form>
                                     </details>
@@ -449,39 +544,67 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     <div class="mt-8 flex flex-wrap items-center gap-4">
                         // Empty cart line: the stepper has nothing to show yet
                         // and the button is the way in.
-                        <button class=(BTN.to_string() + " h-11 px-8")
-                                :hidden=$(held_qty.get() > 0.0)
-                                @click=$(async |_e| {
-                                    held_qty.set(set_line(sku_sig.get(), size.get(), 1.0).await);
-                                })>"Ajouter au panier"</button>
+                        <button
+                            class=(BTN.to_string() + " h-11 px-8")
+                            :hidden=$(held_qty.get() > 0.0)
+                            @click=$(async |_e| {
+                                held_qty.set(set_line(sku_sig.get(), size.get(), 1.0).await);
+                            })
+                        >
+                            "Ajouter au panier"
+                        </button>
 
-                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300"
-                             :hidden=$(held_qty.get() == 0.0)>
-                            <button aria-label="Retirer un exemplaire du panier"
-                                    class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
-                                    @click=$(async |_e| {
-                                        held_qty.set(set_line(sku_sig.get(), size.get(), held_qty.get() - 1.0).await);
-                                    })>"−"</button>
-                            <span class="w-9 text-center tabular-nums">$(held_qty.get())</span>
-                            <button aria-label="Ajouter un exemplaire au panier"
-                                    :class=$(if held_qty.get() >= size_stock.get() {
-                                        "flex h-11 w-11 select-none items-center justify-center rounded-r-full text-lg text-oat-300"
-                                    } else {
-                                        "flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
-                                    })
+                        <div
+                            class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300"
+                            :hidden=$(held_qty.get() == 0.0)
+                        >
+                            <button
+                                aria-label="Retirer un exemplaire du panier"
+                                class="flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-l-full text-lg transition hover:bg-oat-100"
+                                @click=$(async |_e| {
+                                    held_qty.set(
+                                        set_line(sku_sig.get(), size.get(), held_qty.get() - 1.0).await,
+                                    );
+                                })
+                            >
+                                "−"
+                            </button>
+                            <span class="w-9 text-center tabular-nums">
+                                $(held_qty.get())
+                            </span>
+                            <button
+                                aria-label="Ajouter un exemplaire au panier"
+                                :class=$(if held_qty.get() >= size_stock.get() {
+                                    "flex h-11 w-11 select-none items-center justify-center rounded-r-full text-lg text-oat-300"
+                                } else {
+                                    "flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-r-full text-lg transition hover:bg-oat-100"
+                                })
+                                @click=$(async |_e| {
                                     // No ceiling guard: an `if` around an await
                                     // compiles to a plain arrow the runtime
                                     // cannot run, and the server clamps anyway.
-                                    @click=$(async |_e| {
-                                        held_qty.set(set_line(sku_sig.get(), size.get(), held_qty.get() + 1.0).await);
-                                    })>"+"</button>
+                                    held_qty.set(
+                                        set_line(sku_sig.get(), size.get(), held_qty.get() + 1.0).await,
+                                    );
+                                })
+                            >
+                                "+"
+                            </button>
                         </div>
 
-                        <a href="/panier" class=(BTN_OUTLINE.to_string() + " h-11")
-                           :hidden=$(held_qty.get() == 0.0)>"Voir le panier"</a>
+                        <a
+                            href="/panier"
+                            class=(BTN_OUTLINE.to_string() + " h-11")
+                            :hidden=$(held_qty.get() == 0.0)
+                        >
+                            "Voir le panier"
+                        </a>
                     </div>
 
-                    <p class="mt-4 text-sm text-brique-700" :hidden=$(held_qty.get() < size_stock.get())>
+                    <p
+                        class="mt-4 text-sm text-brique-700"
+                        :hidden=$(held_qty.get() < size_stock.get())
+                    >
                         "Vous avez tout le stock disponible dans votre panier."
                     </p>
 
@@ -493,7 +616,10 @@ async fn product(cx: &Cx) -> Result<impl View> {
                 }
 
                 <ul class=("mt-10 space-y-2 text-sm ".to_string() + MUTED)>
-                    <li>"Livraison offerte dès " (format_price(db::FREE_SHIPPING_CENTS))</li>
+                    <li>
+                        "Livraison offerte dès "
+                        (format_price(db::FREE_SHIPPING_CENTS))
+                    </li>
                     <li>"Retour accepté 30 jours, échange de taille compris"</li>
                     <li>"Expédié de Brest sous 48 heures"</li>
                 </ul>
@@ -505,38 +631,66 @@ async fn product(cx: &Cx) -> Result<impl View> {
                 <h2 class="text-3xl">"Les avis"</h2>
                 if review_count > 0 {
                     <p class=("text-sm ".to_string() + MUTED)>
-                        <span class="tracking-wider text-gin-700">(stars(average.round() as i64))</span>
+                        <span class="tracking-wider text-gin-700">
+                            (stars(average.round() as i64))
+                        </span>
                         (format!(" {average:.1} sur 5 — {review_count} avis"))
                     </p>
                 }
             </div>
 
             if review_count == 0 {
-                <p class=("mt-6 ".to_string() + SOFT)>"Pas encore d'avis — cette pièce attend son premier retour."</p>
+                <p class=("mt-6 ".to_string() + SOFT)>
+                    "Pas encore d'avis — cette pièce attend son premier retour."
+                </p>
             } else {
                 <ul class="mt-8 grid gap-6 lg:grid-cols-2">
                     for r in &reviews {
                         <li class=(CARD.to_string() + " p-6")>
                             <div class="flex items-baseline justify-between gap-3">
                                 <span class="font-medium">(&r.author)</span>
-                                <span class="text-sm tracking-wider text-gin-700" role="img" aria-label=(format!("{} sur 5", r.rating))>(stars(r.rating))</span>
+                                <span
+                                    class="text-sm tracking-wider text-gin-700"
+                                    role="img"
+                                    aria-label=(format!("{} sur 5", r.rating))
+                                >
+                                    (stars(r.rating))
+                                </span>
                             </div>
-                            <p class=("mt-3 text-sm leading-relaxed ".to_string() + SOFT)>(&r.text)</p>
-                            <time class=("mt-3 block text-xs ".to_string() + MUTED)>(r.created_at.get(..10).unwrap_or_default().to_string())</time>
+                            <p
+                                class=("mt-3 text-sm leading-relaxed ".to_string() + SOFT)
+                            >
+                                (&r.text)
+                            </p>
+                            <time class=("mt-3 block text-xs ".to_string() + MUTED)>
+                                (r.created_at.get(..10).unwrap_or_default().to_string())
+                            </time>
                         </li>
                     }
                 </ul>
             }
 
             if review_thanks {
-                <p class="animate-apparition mt-8 inline-flex rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50">"Merci pour votre avis !"</p>
+                <p
+                    class="animate-apparition mt-8 inline-flex rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50"
+                >
+                    "Merci pour votre avis !"
+                </p>
             } else {
                 if signed_in {
-                    <form method="post" action=(format!("/produit/{}/avis", p.sku)) class=(CARD.to_string() + " mt-8 max-w-xl space-y-4 p-6")>
+                    <form
+                        method="post"
+                        action=(format!("/produit/{}/avis", p.sku))
+                        class=(CARD.to_string() + " mt-8 max-w-xl space-y-4 p-6")
+                    >
                         <p class="font-medium">"Votre avis"</p>
                         <div class="flex items-center gap-3">
                             <label class="text-sm" for="note">"Note"</label>
-                            <select id="note" name="rating" class="rounded-xl bg-oat-50 px-3 py-2 text-sm ring-1 ring-oat-300">
+                            <select
+                                id="note"
+                                name="rating"
+                                class="rounded-xl bg-oat-50 px-3 py-2 text-sm ring-1 ring-oat-300"
+                            >
                                 <option value="5">"5 — Impeccable"</option>
                                 <option value="4">"4 — Très bien"</option>
                                 <option value="3">"3 — Correct"</option>
@@ -544,12 +698,21 @@ async fn product(cx: &Cx) -> Result<impl View> {
                                 <option value="1">"1 — Non"</option>
                             </select>
                         </div>
-                        <textarea name="text" rows="3" required="required" minlength="10" class=(FIELD) placeholder="La matière, la coupe, la vie avec."></textarea>
+                        <textarea
+                            name="text"
+                            rows="3"
+                            required="required"
+                            minlength="10"
+                            class=(FIELD)
+                            placeholder="La matière, la coupe, la vie avec."
+                        ></textarea>
                         <button class=(BTN)>"Publier"</button>
                     </form>
                 } else {
                     <p class=("mt-8 text-sm ".to_string() + MUTED)>
-                        <a href="/connexion" class="underline underline-offset-4">"Connectez-vous"</a>
+                        <a href="/connexion" class="underline underline-offset-4">
+                            "Connectez-vous"
+                        </a>
                         " pour laisser un avis."
                     </p>
                 }

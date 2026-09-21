@@ -47,16 +47,26 @@ async fn house() -> Result<impl View> {
         </div>
 
         <div class="mt-14 max-w-4xl">
-            <div class="aspect-video overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
-                 data-bg=(crate::images::background("maison-rade"))>
-                <img src=(crate::images::url("maison-rade", 900))
-                     srcset=(format!("{} 900w, {} 1600w", crate::images::url("maison-rade", 900), crate::images::url("maison-rade", 1600)))
-                     sizes="(min-width: 1024px) 56rem, 100vw"
-                     alt="Un phare au large de la rade, sur son îlot rocheux"
-                     loading="lazy"
-                     class="h-full w-full object-cover">
+            <div
+                class="aspect-video overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
+                data-bg=(crate::images::background("maison-rade"))
+            >
+                <img
+                    src=(crate::images::url("maison-rade", 900))
+                    srcset=(format!(
+                        "{} 900w, {} 1600w",
+                        crate::images::url("maison-rade", 900),
+                        crate::images::url("maison-rade", 1600),
+                    ))
+                    sizes="(min-width: 1024px) 56rem, 100vw"
+                    alt="Un phare au large de la rade, sur son îlot rocheux"
+                    loading="lazy"
+                    class="h-full w-full object-cover"
+                >
             </div>
-            <p class=("mt-3 text-center text-sm ".to_string() + MUTED)>"La rade, vue du bureau — les jours où le bureau est un ponton."</p>
+            <p class=("mt-3 text-center text-sm ".to_string() + MUTED)>
+                "La rade, vue du bureau — les jours où le bureau est un ponton."
+            </p>
         </div>
 
         <section class="mt-20">
@@ -64,7 +74,11 @@ async fn house() -> Result<impl View> {
             <div class="mt-10 grid max-w-4xl gap-6 sm:grid-cols-3">
                 for (initials, name, role) in CREW {
                     <div class=(CARD.to_string() + " p-8 text-center")>
-                        <span class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gin-100 font-display text-xl text-gin-800">(initials)</span>
+                        <span
+                            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gin-100 font-display text-xl text-gin-800"
+                        >
+                            (initials)
+                        </span>
                         <p class="mt-4 font-medium">(name)</p>
                         <p class=("mt-1 text-sm ".to_string() + MUTED)>(role)</p>
                     </div>
@@ -134,9 +148,15 @@ async fn help() -> Result<impl View> {
                             for (size, shoulders, length, shoe) in SIZES {
                                 <tr class="border-b border-oat-200">
                                     <td class="py-3 font-medium">(size)</td>
-                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>(shoulders)</td>
-                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>(length)</td>
-                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>(shoe)</td>
+                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>
+                                        (shoulders)
+                                    </td>
+                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>
+                                        (length)
+                                    </td>
+                                    <td class=("py-3 tabular-nums ".to_string() + MUTED)>
+                                        (shoe)
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -151,11 +171,19 @@ async fn help() -> Result<impl View> {
                         // The padding belongs to the summary, not the details:
                         // it is the summary that takes the click.
                         <details class="group border-b border-oat-200">
-                            <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 font-medium transition hover:text-gin-700">
+                            <summary
+                                class="flex cursor-pointer items-center justify-between gap-4 py-5 font-medium transition hover:text-gin-700"
+                            >
                                 (question)
-                                <span class="shrink-0 text-oat-500 transition group-open:rotate-45">"+"</span>
+                                <span
+                                    class="shrink-0 text-oat-500 transition group-open:rotate-45"
+                                >
+                                    "+"
+                                </span>
                             </summary>
-                            <p class=("-mt-1 pb-5 leading-relaxed ".to_string() + SOFT)>(answer)</p>
+                            <p class=("-mt-1 pb-5 leading-relaxed ".to_string() + SOFT)>
+                                (answer)
+                            </p>
                         </details>
                     }
                 </div>
@@ -186,15 +214,23 @@ async fn contact(cx: &Cx) -> Result<impl View> {
                 <dl class="mt-10 space-y-5 text-sm">
                     <div>
                         <dt class="font-medium">"Email"</dt>
-                        <dd class=("mt-1 ".to_string() + MUTED)>"bonjour@bernard.sh"</dd>
+                        <dd class=("mt-1 ".to_string() + MUTED)>
+                            "bonjour@bernard.sh"
+                        </dd>
                     </div>
                     <div>
                         <dt class="font-medium">"Atelier"</dt>
-                        <dd class=("mt-1 leading-relaxed ".to_string() + MUTED)>"12 quai de la Douane" <br> "29200 Brest"</dd>
+                        <dd class=("mt-1 leading-relaxed ".to_string() + MUTED)>
+                            "12 quai de la Douane"
+                            <br>
+                            "29200 Brest"
+                        </dd>
                     </div>
                     <div>
                         <dt class="font-medium">"Délai de réponse"</dt>
-                        <dd class=("mt-1 ".to_string() + MUTED)>"Un humain sous 24 h, un crabe sous 48 h."</dd>
+                        <dd class=("mt-1 ".to_string() + MUTED)>
+                            "Un humain sous 24 h, un crabe sous 48 h."
+                        </dd>
                     </div>
                 </dl>
             </div>
@@ -204,35 +240,74 @@ async fn contact(cx: &Cx) -> Result<impl View> {
                     <div class="space-y-5">
                         <div>
                             <label class="text-sm font-medium">"Nom"</label>
-                            <input class=(FIELD.to_string() + " mt-2") placeholder="Marie Carapace"
-                                   :value=$(name.get()) @input=$(|e: Event| name.set(e.target.value))>
+                            <input
+                                class=(FIELD.to_string() + " mt-2")
+                                placeholder="Marie Carapace"
+                                :value=$(name.get())
+                                @input=$(|e: Event| name.set(e.target.value))
+                            >
                         </div>
                         <div>
                             <label class="text-sm font-medium">"Email"</label>
-                            <input class=(FIELD.to_string() + " mt-2") placeholder="marie@coquille.fr"
-                                   :value=$(email.get()) @input=$(|e: Event| email.set(e.target.value))>
-                            <p class="mt-2 text-xs text-brique-700"
-                               :hidden=$(if email.get().trim().is_empty() { true } else { if email.get().contains("@") { email.get().contains(".") } else { false } })>
+                            <input
+                                class=(FIELD.to_string() + " mt-2")
+                                placeholder="marie@coquille.fr"
+                                :value=$(email.get())
+                                @input=$(|e: Event| email.set(e.target.value))
+                            >
+                            <p
+                                class="mt-2 text-xs text-brique-700"
+                                :hidden=$(if email.get().trim().is_empty() {
+                                    true
+                                } else {
+                                    if email.get().contains("@") {
+                                        email.get().contains(".")
+                                    } else {
+                                        false
+                                    }
+                                })
+                            >
                                 "Cette adresse ne ressemble pas à une adresse."
                             </p>
                         </div>
                         <div>
                             <label class="text-sm font-medium">"Message"</label>
-                            <textarea class=(FIELD.to_string() + " mt-2") rows="5" placeholder="Votre message…"
-                                      :value=$(message.get()) @input=$(|e: Event| message.set(e.target.value))></textarea>
+                            <textarea
+                                class=(FIELD.to_string() + " mt-2")
+                                rows="5"
+                                placeholder="Votre message…"
+                                :value=$(message.get())
+                                @input=$(|e: Event| message.set(e.target.value))
+                            ></textarea>
                         </div>
-                        <button class=(BTN.to_string() + " w-full")
-                                :disabled=$(if name.get().trim().is_empty() { true } else { if message.get().trim().is_empty() { true } else { !email.get().contains("@") } })
-                                @click=$(|_e| {
-                                    sent.set(true);
-                                    message.set(blank.get());
-                                })>"Envoyer"</button>
+                        <button
+                            class=(BTN.to_string() + " w-full")
+                            :disabled=$(if name.get().trim().is_empty() {
+                                true
+                            } else {
+                                if message.get().trim().is_empty() {
+                                    true
+                                } else {
+                                    !email.get().contains("@")
+                                }
+                            })
+                            @click=$(|_e| {
+                                sent.set(true);
+                                message.set(blank.get());
+                            })
+                        >
+                            "Envoyer"
+                        </button>
                     </div>
                 </div>
 
                 <div class="py-12 text-center" :hidden=$(!sent.get())>
                     <p class="text-4xl">"✓"</p>
-                    <p class="mt-4 font-display text-2xl">"Merci " $(name.get()) " !"</p>
+                    <p class="mt-4 font-display text-2xl">
+                        "Merci "
+                        $(name.get())
+                        " !"
+                    </p>
                     <p class=("mt-2 text-sm ".to_string() + SOFT)>
                         "Votre message est arrivé dans la coquille. On vous répond très vite."
                     </p>
@@ -266,12 +341,20 @@ async fn terms() -> Result<impl View> {
 
     Ok(view! {
         <div class="max-w-2xl">
-            page_heading(eyebrow: "Légal", title: "Conditions générales de vente", lede: "")
+            page_heading(
+                eyebrow: "Légal",
+                title: "Conditions générales de vente",
+                lede: ""
+            )
             <div class="mt-12 space-y-10">
                 for (i, (title, text)) in articles.iter().enumerate() {
                     <section>
-                        <h2 class="text-xl">(format!("Article {} — {title}", i + 1))</h2>
-                        <p class=("mt-3 leading-relaxed ".to_string() + SOFT)>(*text)</p>
+                        <h2 class="text-xl">
+                            (format!("Article {} — {title}", i + 1))
+                        </h2>
+                        <p class=("mt-3 leading-relaxed ".to_string() + SOFT)>
+                            (*text)
+                        </p>
                     </section>
                 }
             </div>
@@ -287,25 +370,38 @@ async fn legal() -> Result<impl View> {
             <dl class=("mt-12 space-y-8 leading-relaxed ".to_string() + SOFT)>
                 <div>
                     <dt class="font-medium text-oat-900">"Éditeur"</dt>
-                    <dd class="mt-2">"Bernard SAS, 12 quai de la Douane, 29200 Brest. \
-                                      Société fictive, créée pour une démonstration technique."</dd>
+                    <dd class="mt-2">
+                        "Bernard SAS, 12 quai de la Douane, 29200 Brest. \
+                                      Société fictive, créée pour une démonstration technique."
+                    </dd>
                 </div>
                 <div>
                     <dt class="font-medium text-oat-900">"Hébergement"</dt>
-                    <dd class="mt-2">"Cette boutique tourne sur un serveur Rust bâti avec \
-                                      Topcoat, servi depuis une image minimale."</dd>
+                    <dd class="mt-2">
+                        "Cette boutique tourne sur un serveur Rust bâti avec \
+                                      Topcoat, servi depuis une image minimale."
+                    </dd>
                 </div>
                 <div>
-                    <dt class="font-medium text-oat-900">"Propriété intellectuelle"</dt>
-                    <dd class="mt-2">"Les textes et visuels de ce site sont produits pour la \
+                    <dt class="font-medium text-oat-900">
+                        "Propriété intellectuelle"
+                    </dt>
+                    <dd class="mt-2">
+                        "Les textes et visuels de ce site sont produits pour la \
                                       démonstration. Les fontes Instrument Serif et Instrument \
-                                      Sans sont distribuées sous licence libre."</dd>
+                                      Sans sont distribuées sous licence libre."
+                    </dd>
                 </div>
                 <div>
                     <dt class="font-medium text-oat-900">"Photographies"</dt>
                     <dd class="mt-2">
                         "Les photographies des produits proviennent de "
-                        <a href="https://unsplash.com" class="underline underline-offset-4">"Unsplash"</a>
+                        <a
+                            href="https://unsplash.com"
+                            class="underline underline-offset-4"
+                        >
+                            "Unsplash"
+                        </a>
                         ", où leurs auteurs les publient sous la licence Unsplash. \
                          Elles sont redimensionnées à la volée par le serveur."
                     </dd>
@@ -315,7 +411,9 @@ async fn legal() -> Result<impl View> {
                     <dd class="mt-2">"bonjour@bernard.sh"</dd>
                 </div>
             </dl>
-            <p class=("mt-12 text-sm ".to_string() + EYEBROW)>"Boutique de démonstration"</p>
+            <p class=("mt-12 text-sm ".to_string() + EYEBROW)>
+                "Boutique de démonstration"
+            </p>
         </div>
     })
 }

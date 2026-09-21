@@ -61,15 +61,23 @@ async fn journal() -> Result<impl View> {
         <div class="mt-14 grid gap-10 lg:grid-cols-3">
             for (slug, date, tag, title, lede) in POSTS {
                 <a href=("/journal/".to_string() + slug) class="group block">
-                    <div class="aspect-video overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition group-hover:ring-gin-300"
-                         data-vt=(slug)
-                         data-bg=(crate::images::background(photo_key(tag)))>
-                        <img src=(crate::images::url(photo_key(tag), 400))
-                             srcset=(format!("{} 400w, {} 900w", crate::images::url(photo_key(tag), 400), crate::images::url(photo_key(tag), 900)))
-                             sizes="(min-width: 1024px) 33vw, 100vw"
-                             alt=(title)
-                             loading="lazy"
-                             class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                    <div
+                        class="aspect-video overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition group-hover:ring-gin-300"
+                        data-vt=(slug)
+                        data-bg=(crate::images::background(photo_key(tag)))
+                    >
+                        <img
+                            src=(crate::images::url(photo_key(tag), 400))
+                            srcset=(format!(
+                                "{} 400w, {} 900w",
+                                crate::images::url(photo_key(tag), 400),
+                                crate::images::url(photo_key(tag), 900),
+                            ))
+                            sizes="(min-width: 1024px) 33vw, 100vw"
+                            alt=(title)
+                            loading="lazy"
+                            class="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        >
                     </div>
                     <div class="mt-5 flex items-center gap-3">
                         <span class=(BADGE)>(tag)</span>
@@ -100,43 +108,68 @@ async fn post(cx: &Cx) -> Result<impl View> {
             <h1 class="mt-5 text-4xl leading-tight sm:text-5xl">(title)</h1>
             <p class=("mt-5 text-lg leading-relaxed ".to_string() + SOFT)>(lede)</p>
 
-            <div class="relative mt-8 aspect-video overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
-                 data-vt=(&slug)
-                 data-bg=(crate::images::background(photo_key(tag)))>
+            <div
+                class="relative mt-8 aspect-video overflow-hidden rounded-3xl bg-oat-100 ring-1 ring-oat-200"
+                data-vt=(&slug)
+                data-bg=(crate::images::background(photo_key(tag)))
+            >
                 // Same bridge as the product hero: the listing's 400 px tile
                 // sits blurred underneath while the big one travels.
-                <img src=(crate::images::url(photo_key(tag), 400))
-                     alt=""
-                     aria-hidden="true"
-                     class="absolute inset-0 h-full w-full scale-105 object-cover blur-sm">
-                <img src=(crate::images::url(photo_key(tag), 900))
-                     srcset=(format!("{} 900w, {} 1600w", crate::images::url(photo_key(tag), 900), crate::images::url(photo_key(tag), 1600)))
-                     sizes="(min-width: 768px) 42rem, 100vw"
-                     alt=(title)
-                     fetchpriority="high"
-                     class="relative h-full w-full object-cover">
+                <img
+                    src=(crate::images::url(photo_key(tag), 400))
+                    alt=""
+                    aria-hidden="true"
+                    class="absolute inset-0 h-full w-full scale-105 object-cover blur-sm"
+                >
+                <img
+                    src=(crate::images::url(photo_key(tag), 900))
+                    srcset=(format!(
+                        "{} 900w, {} 1600w",
+                        crate::images::url(photo_key(tag), 900),
+                        crate::images::url(photo_key(tag), 1600),
+                    ))
+                    sizes="(min-width: 768px) 42rem, 100vw"
+                    alt=(title)
+                    fetchpriority="high"
+                    class="relative h-full w-full object-cover"
+                >
             </div>
 
             <div class="mt-10 space-y-6">
                 for (rank, paragraph) in body.iter().enumerate() {
                     // The drop cap's top should sit on the first line's cap
                     // height; the serif ascends past its box, so nudge down.
-                    <p class=(if rank == 0 {
-                        "leading-[1.8] text-oat-700 first-letter:float-left first-letter:mt-2 first-letter:pr-3 first-letter:font-display first-letter:text-6xl first-letter:leading-[0.75] first-letter:text-gin-800"
-                    } else {
-                        "leading-[1.8] text-oat-700"
-                    })>(*paragraph)</p>
+                    <p
+                        class=(if rank == 0 {
+                            "leading-[1.8] text-oat-700 first-letter:float-left first-letter:mt-2 first-letter:pr-3 first-letter:font-display first-letter:text-6xl first-letter:leading-[0.75] first-letter:text-gin-800"
+                        } else {
+                            "leading-[1.8] text-oat-700"
+                        })
+                    >
+                        (*paragraph)
+                    </p>
                 }
             </div>
 
-            <div class="mt-14 rounded-2xl bg-oat-100 px-6 py-8 text-center ring-1 ring-oat-200">
+            <div
+                class="mt-14 rounded-2xl bg-oat-100 px-6 py-8 text-center ring-1 ring-oat-200"
+            >
                 <p class=(EYEBROW)>"La collection"</p>
-                <p class="mt-3 font-display text-2xl">"Voir les pièces dont on parle"</p>
-                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-6")>"Ouvrir la boutique"</a>
+                <p class="mt-3 font-display text-2xl">
+                    "Voir les pièces dont on parle"
+                </p>
+                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-6")>
+                    "Ouvrir la boutique"
+                </a>
             </div>
 
             <p class="mt-12">
-                <a href="/journal" class="text-sm text-gin-700 underline underline-offset-4">"← Tous les billets"</a>
+                <a
+                    href="/journal"
+                    class="text-sm text-gin-700 underline underline-offset-4"
+                >
+                    "← Tous les billets"
+                </a>
             </p>
         </article>
     })

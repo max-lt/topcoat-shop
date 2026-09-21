@@ -29,9 +29,20 @@ async fn header(active: &str) -> Result<impl View> {
         <nav class="mt-8 flex flex-wrap gap-2 border-b border-oat-200 pb-4">
             for (path, label) in TABS {
                 if path == active {
-                    <a href=(path) class="rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50" aria-current="page">(label)</a>
+                    <a
+                        href=(path)
+                        class="rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
+                        aria-current="page"
+                    >
+                        (label)
+                    </a>
                 } else {
-                    <a href=(path) class="rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100">(label)</a>
+                    <a
+                        href=(path)
+                        class="rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
+                    >
+                        (label)
+                    </a>
                 }
             }
         </nav>
@@ -61,12 +72,24 @@ async fn dashboard(cx: &Cx) -> Result<impl View> {
         header(active: "/admin")
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            stat_card(value: format_price(stats.revenue_cents), label: "Chiffre d'affaires")
+            stat_card(
+                value: format_price(stats.revenue_cents),
+                label: "Chiffre d'affaires"
+            )
             stat_card(value: stats.orders.to_string(), label: "Commandes")
             stat_card(value: stats.customers.to_string(), label: "Comptes")
-            stat_card(value: stats.products.to_string(), label: "Références au catalogue")
-            stat_card(value: stats.subscribers.to_string(), label: "Abonnés à la lettre")
-            stat_card(value: stats.alerts.to_string(), label: "Alertes de retour en stock")
+            stat_card(
+                value: stats.products.to_string(),
+                label: "Références au catalogue"
+            )
+            stat_card(
+                value: stats.subscribers.to_string(),
+                label: "Abonnés à la lettre"
+            )
+            stat_card(
+                value: stats.alerts.to_string(),
+                label: "Alertes de retour en stock"
+            )
         </div>
 
         <h2 class="mt-14 text-3xl">"Dernières commandes"</h2>
@@ -84,11 +107,17 @@ async fn dashboard(cx: &Cx) -> Result<impl View> {
                 <tbody>
                     for o in recent {
                         <tr class="border-b border-oat-200">
-                            <td class=(CELL.to_string() + " tabular-nums")>(&o.reference)</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (&o.reference)
+                            </td>
                             <td class=(CELL)>(&o.customer)</td>
                             <td class=(CELL)>status_badge(status: o.status.clone())</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(o.created_at.get(..10).unwrap_or_default().to_string())</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(format_price(o.total_cents))</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (o.created_at.get(..10).unwrap_or_default().to_string())
+                            </td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (format_price(o.total_cents))
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -105,9 +134,7 @@ async fn products(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         header(active: "/admin/produits")
 
-        <p class="mt-6">
-            <a href="/admin/nouveau" class=(BTN)>"Nouveau produit"</a>
-        </p>
+        <p class="mt-6"><a href="/admin/nouveau" class=(BTN)>"Nouveau produit"</a></p>
 
         <div class="mt-4 overflow-x-auto">
             <table class="w-full text-sm">
@@ -122,29 +149,60 @@ async fn products(cx: &Cx) -> Result<impl View> {
                 </thead>
                 <tbody>
                     for p in products {
-                        <tr class=(if p.hidden != 0 { "border-b border-oat-200 opacity-50" } else { "border-b border-oat-200" })>
+                        <tr
+                            class=(if p.hidden != 0 {
+                                "border-b border-oat-200 opacity-50"
+                            } else {
+                                "border-b border-oat-200"
+                            })
+                        >
                             <td class=(CELL)>
                                 (&p.name)
-                                <span class=("ml-2 text-xs ".to_string() + MUTED)>(&p.sku)</span>
+                                <span class=("ml-2 text-xs ".to_string() + MUTED)>
+                                    (&p.sku)
+                                </span>
                                 if p.hidden != 0 {
-                                    <span class="ml-2 rounded-full bg-oat-200 px-2 py-0.5 text-xs text-oat-700">"Masqué"</span>
+                                    <span
+                                        class="ml-2 rounded-full bg-oat-200 px-2 py-0.5 text-xs text-oat-700"
+                                    >
+                                        "Masqué"
+                                    </span>
                                 }
                             </td>
                             <td class=(CELL)>(&p.category)</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(format_price(p.price_cents))</td>
-                            <td class=(if p.stock == 0 {
-                                "py-3 pr-6 tabular-nums text-brique-700"
-                            } else {
-                                "py-3 pr-6 tabular-nums"
-                            })>(p.stock)</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (format_price(p.price_cents))
+                            </td>
+                            <td
+                                class=(if p.stock == 0 {
+                                    "py-3 pr-6 tabular-nums text-brique-700"
+                                } else {
+                                    "py-3 pr-6 tabular-nums"
+                                })
+                            >
+                                (p.stock)
+                            </td>
                             <td class=(CELL)>
                                 <div class="flex items-center gap-4">
-                                    <a href=("/admin/produit/".to_string() + &p.sku)
-                                       class="text-gin-700 underline underline-offset-4">"Modifier"</a>
+                                    <a
+                                        href=("/admin/produit/".to_string() + &p.sku)
+                                        class="text-gin-700 underline underline-offset-4"
+                                    >
+                                        "Modifier"
+                                    </a>
                                     <form method="post" action="/admin/masquer">
                                         <input type="hidden" name="sku" value=(&p.sku)>
-                                        <button class=("underline underline-offset-4 transition hover:text-gin-700 ".to_string() + MUTED)>
-                                            if p.hidden != 0 { "Remettre en boutique" } else { "Masquer" }
+                                        <button
+                                            class=("underline underline-offset-4 transition hover:text-gin-700 ".to_string(
+
+                                                )
+                                                + MUTED)
+                                        >
+                                            if p.hidden != 0 {
+                                                "Remettre en boutique"
+                                            } else {
+                                                "Masquer"
+                                            }
                                         </button>
                                     </form>
                                 </div>
@@ -173,19 +231,40 @@ async fn product(cx: &Cx) -> Result<impl View> {
         header(active: "/admin/produits")
 
         <div class="mt-8 flex items-center gap-5">
-            <div class="h-20 w-20 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200">
-                <img src=(crate::images::url(&p.sku, 400)) alt="" class="h-full w-full object-cover">
+            <div
+                class="h-20 w-20 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200"
+            >
+                <img
+                    src=(crate::images::url(&p.sku, 400))
+                    alt=""
+                    class="h-full w-full object-cover"
+                >
             </div>
             <div>
                 <h2 class="text-3xl">(&p.name)</h2>
                 <p class=("mt-1 text-sm ".to_string() + MUTED)>
-                    (&p.sku) " — "
-                    <a href=("/produit/".to_string() + &p.sku) class="underline underline-offset-4">"voir la fiche publique"</a>
+                    (&p.sku)
+                    " — "
+                    <a
+                        href=("/produit/".to_string() + &p.sku)
+                        class="underline underline-offset-4"
+                    >
+                        "voir la fiche publique"
+                    </a>
                 </p>
                 <form method="post" action="/admin/masquer" class="mt-2">
                     <input type="hidden" name="sku" value=(&p.sku)>
-                    <button class=("text-sm underline underline-offset-4 transition hover:text-gin-700 ".to_string() + MUTED)>
-                        if p.hidden != 0 { "Masqué — remettre en boutique" } else { "Visible — masquer de la boutique" }
+                    <button
+                        class=("text-sm underline underline-offset-4 transition hover:text-gin-700 ".to_string(
+
+                            )
+                            + MUTED)
+                    >
+                        if p.hidden != 0 {
+                            "Masqué — remettre en boutique"
+                        } else {
+                            "Visible — masquer de la boutique"
+                        }
                     </button>
                 </form>
             </div>
@@ -198,12 +277,23 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     <input type="hidden" name="sku" value=(&p.sku)>
                     <div>
                         <label class="text-sm font-medium">"Nom"</label>
-                        <input class=(FIELD.to_string() + " mt-1") name="name" required="required" value=(&p.name)>
+                        <input
+                            class=(FIELD.to_string() + " mt-1")
+                            name="name"
+                            required="required"
+                            value=(&p.name)
+                        >
                     </div>
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label class="text-sm font-medium">"Catégorie"</label>
-                            <input class=(FIELD.to_string() + " mt-1") name="category" required="required" value=(&p.category) list="categories">
+                            <input
+                                class=(FIELD.to_string() + " mt-1")
+                                name="category"
+                                required="required"
+                                value=(&p.category)
+                                list="categories"
+                            >
                             <datalist id="categories">
                                 for c in categories {
                                     <option value=(&c)></option>
@@ -212,22 +302,53 @@ async fn product(cx: &Cx) -> Result<impl View> {
                         </div>
                         <div>
                             <label class="text-sm font-medium">"Matière"</label>
-                            <input class=(FIELD.to_string() + " mt-1") name="material" value=(&p.material)>
+                            <input
+                                class=(FIELD.to_string() + " mt-1")
+                                name="material"
+                                value=(&p.material)
+                            >
                         </div>
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Résumé"</label>
-                        <textarea class=(FIELD.to_string() + " mt-1") name="summary" rows="2" required="required">(&p.summary)</textarea>
+                        <textarea
+                            class=(FIELD.to_string() + " mt-1")
+                            name="summary"
+                            rows="2"
+                            required="required"
+                        >
+                            (&p.summary)
+                        </textarea>
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Description"</label>
-                        <textarea class=(FIELD.to_string() + " mt-1") name="detail" rows="4" required="required">(&p.detail)</textarea>
+                        <textarea
+                            class=(FIELD.to_string() + " mt-1")
+                            name="detail"
+                            rows="4"
+                            required="required"
+                        >
+                            (&p.detail)
+                        </textarea>
                     </div>
-                    <label class=("flex items-center gap-2 text-sm ".to_string() + MUTED)>
+                    <label
+                        class=("flex items-center gap-2 text-sm ".to_string() + MUTED)
+                    >
                         if is_new {
-                            <input type="checkbox" name="is_new" value="1" checked="checked" class="h-4 w-4 accent-gin-700">
+                            <input
+                                type="checkbox"
+                                name="is_new"
+                                value="1"
+                                checked="checked"
+                                class="h-4 w-4 accent-gin-700"
+                            >
                         } else {
-                            <input type="checkbox" name="is_new" value="1" class="h-4 w-4 accent-gin-700">
+                            <input
+                                type="checkbox"
+                                name="is_new"
+                                value="1"
+                                class="h-4 w-4 accent-gin-700"
+                            >
                         }
                         "Afficher le badge Nouveau"
                     </label>
@@ -238,10 +359,19 @@ async fn product(cx: &Cx) -> Result<impl View> {
             <div class="space-y-8">
                 <section class=(CARD.to_string() + " p-6")>
                     <h3 class="text-xl">"Prix"</h3>
-                    <form method="post" action="/admin/prix" class="mt-4 flex items-center gap-3">
+                    <form
+                        method="post"
+                        action="/admin/prix"
+                        class="mt-4 flex items-center gap-3"
+                    >
                         <input type="hidden" name="sku" value=(&p.sku)>
-                        <input name="price" value=(price_text) inputmode="decimal"
-                               class="w-28 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300" aria-label="Prix en euros">
+                        <input
+                            name="price"
+                            value=(price_text)
+                            inputmode="decimal"
+                            class="w-28 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300"
+                            aria-label="Prix en euros"
+                        >
                         <span class=(MUTED)>"€"</span>
                         <button class=(BTN)>"Enregistrer"</button>
                     </form>
@@ -252,30 +382,65 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     <div class="mt-4 space-y-3">
                         for v in variants {
                             <div class="flex items-center gap-3">
-                                <form method="post" action="/admin/stock" class="flex items-center gap-3">
+                                <form
+                                    method="post"
+                                    action="/admin/stock"
+                                    class="flex items-center gap-3"
+                                >
                                     <input type="hidden" name="sku" value=(&p.sku)>
                                     <input type="hidden" name="size" value=(&v.size)>
                                     <span class="w-24 text-sm">
-                                        if v.size.is_empty() { "Taille unique" } else { (&v.size) }
+                                        if v.size.is_empty() {
+                                            "Taille unique"
+                                        } else {
+                                            (&v.size)
+                                        }
                                     </span>
-                                    <input name="stock" type="number" min="0" value=(v.stock)
-                                           class="w-24 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300" aria-label="Stock">
+                                    <input
+                                        name="stock"
+                                        type="number"
+                                        min="0"
+                                        value=(v.stock)
+                                        class="w-24 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300"
+                                        aria-label="Stock"
+                                    >
                                     <button class=(BTN)>"Enregistrer"</button>
                                 </form>
                                 <form method="post" action="/admin/variante/retirer">
                                     <input type="hidden" name="sku" value=(&p.sku)>
                                     <input type="hidden" name="size" value=(&v.size)>
-                                    <button class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)>"Retirer"</button>
+                                    <button
+                                        class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+
+                                            )
+                                            + MUTED)
+                                    >
+                                        "Retirer"
+                                    </button>
                                 </form>
                             </div>
                         }
                     </div>
-                    <form method="post" action="/admin/variante" class="mt-5 flex items-center gap-3 border-t border-oat-200 pt-5">
+                    <form
+                        method="post"
+                        action="/admin/variante"
+                        class="mt-5 flex items-center gap-3 border-t border-oat-200 pt-5"
+                    >
                         <input type="hidden" name="sku" value=(&p.sku)>
-                        <input name="size" placeholder="Taille (S, 42…)"
-                               class="w-32 rounded-xl bg-oat-50 px-3 py-2 text-sm ring-1 ring-oat-300" aria-label="Nouvelle taille">
-                        <input name="stock" type="number" min="0" value="0"
-                               class="w-24 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300" aria-label="Stock initial">
+                        <input
+                            name="size"
+                            placeholder="Taille (S, 42…)"
+                            class="w-32 rounded-xl bg-oat-50 px-3 py-2 text-sm ring-1 ring-oat-300"
+                            aria-label="Nouvelle taille"
+                        >
+                        <input
+                            name="stock"
+                            type="number"
+                            min="0"
+                            value="0"
+                            class="w-24 rounded-xl bg-oat-50 px-3 py-2 text-right tabular-nums ring-1 ring-oat-300"
+                            aria-label="Stock initial"
+                        >
                         <button class=(BTN_OUTLINE)>"Ajouter"</button>
                     </form>
                     <p class=("mt-4 text-xs ".to_string() + MUTED)>
@@ -291,7 +456,12 @@ async fn product(cx: &Cx) -> Result<impl View> {
         </div>
 
         <p class="mt-8">
-            <a href="/admin/produits" class="text-sm text-gin-700 underline underline-offset-4">"← Tous les produits"</a>
+            <a
+                href="/admin/produits"
+                class="text-sm text-gin-700 underline underline-offset-4"
+            >
+                "← Tous les produits"
+            </a>
         </p>
     })
 }
@@ -305,21 +475,40 @@ async fn new_product(cx: &Cx) -> Result<impl View> {
         header(active: "/admin/produits")
 
         <h2 class="mt-8 text-3xl">"Nouveau produit"</h2>
-        <form method="post" action="/admin/creer" class=(CARD.to_string() + " mt-6 max-w-2xl space-y-4 p-6")>
+        <form
+            method="post"
+            action="/admin/creer"
+            class=(CARD.to_string() + " mt-6 max-w-2xl space-y-4 p-6")
+        >
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="text-sm font-medium">"Référence (SKU)"</label>
-                    <input class=(FIELD.to_string() + " mt-1") name="sku" required="required" placeholder="COQ-GILET">
+                    <input
+                        class=(FIELD.to_string() + " mt-1")
+                        name="sku"
+                        required="required"
+                        placeholder="COQ-GILET"
+                    >
                 </div>
                 <div>
                     <label class="text-sm font-medium">"Nom"</label>
-                    <input class=(FIELD.to_string() + " mt-1") name="name" required="required" placeholder="Gilet de quart">
+                    <input
+                        class=(FIELD.to_string() + " mt-1")
+                        name="name"
+                        required="required"
+                        placeholder="Gilet de quart"
+                    >
                 </div>
             </div>
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
                     <label class="text-sm font-medium">"Catégorie"</label>
-                    <input class=(FIELD.to_string() + " mt-1") name="category" required="required" list="categories">
+                    <input
+                        class=(FIELD.to_string() + " mt-1")
+                        name="category"
+                        required="required"
+                        list="categories"
+                    >
                     <datalist id="categories">
                         for c in categories {
                             <option value=(&c)></option>
@@ -328,31 +517,65 @@ async fn new_product(cx: &Cx) -> Result<impl View> {
                 </div>
                 <div>
                     <label class="text-sm font-medium">"Prix (€)"</label>
-                    <input class=(FIELD.to_string() + " mt-1") name="price" required="required" inputmode="decimal" placeholder="49,00">
+                    <input
+                        class=(FIELD.to_string() + " mt-1")
+                        name="price"
+                        required="required"
+                        inputmode="decimal"
+                        placeholder="49,00"
+                    >
                 </div>
                 <div>
                     <label class="text-sm font-medium">"Stock initial"</label>
-                    <input class=(FIELD.to_string() + " mt-1") name="stock" type="number" min="0" value="0">
+                    <input
+                        class=(FIELD.to_string() + " mt-1")
+                        name="stock"
+                        type="number"
+                        min="0"
+                        value="0"
+                    >
                 </div>
             </div>
             <div>
                 <label class="text-sm font-medium">"Matière"</label>
-                <input class=(FIELD.to_string() + " mt-1") name="material" placeholder="Laine bouillie, boutons corozo">
+                <input
+                    class=(FIELD.to_string() + " mt-1")
+                    name="material"
+                    placeholder="Laine bouillie, boutons corozo"
+                >
             </div>
             <div>
                 <label class="text-sm font-medium">"Résumé"</label>
-                <textarea class=(FIELD.to_string() + " mt-1") name="summary" rows="2" required="required"></textarea>
+                <textarea
+                    class=(FIELD.to_string() + " mt-1")
+                    name="summary"
+                    rows="2"
+                    required="required"
+                ></textarea>
             </div>
             <div>
                 <label class="text-sm font-medium">"Description"</label>
-                <textarea class=(FIELD.to_string() + " mt-1") name="detail" rows="4" required="required"></textarea>
+                <textarea
+                    class=(FIELD.to_string() + " mt-1")
+                    name="detail"
+                    rows="4"
+                    required="required"
+                ></textarea>
             </div>
             <label class=("flex items-center gap-2 text-sm ".to_string() + MUTED)>
-                <input type="checkbox" name="is_new" value="1" checked="checked" class="h-4 w-4 accent-gin-700">
+                <input
+                    type="checkbox"
+                    name="is_new"
+                    value="1"
+                    checked="checked"
+                    class="h-4 w-4 accent-gin-700"
+                >
                 "Afficher le badge Nouveau"
             </label>
             <button class=(BTN)>"Créer le produit"</button>
-            <p class=("text-xs ".to_string() + MUTED)>"La photo se téléverse à l'étape suivante, sur la fiche."</p>
+            <p class=("text-xs ".to_string() + MUTED)>
+                "La photo se téléverse à l'étape suivante, sur la fiche."
+            </p>
         </form>
     })
 }
@@ -380,12 +603,18 @@ async fn orders(cx: &Cx) -> Result<impl View> {
                 <tbody>
                     for o in orders {
                         <tr class="border-b border-oat-200">
-                            <td class=(CELL.to_string() + " tabular-nums")>(&o.reference)</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (&o.reference)
+                            </td>
                             <td class=(CELL)>(&o.customer)</td>
                             <td class=(CELL)>(&o.email)</td>
                             <td class=(CELL)>status_badge(status: o.status.clone())</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(o.created_at.get(..10).unwrap_or_default().to_string())</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(format_price(o.total_cents))</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (o.created_at.get(..10).unwrap_or_default().to_string())
+                            </td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (format_price(o.total_cents))
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -418,11 +647,19 @@ async fn customers(cx: &Cx) -> Result<impl View> {
                         <tr class="border-b border-oat-200">
                             <td class=(CELL)>(&c.name)</td>
                             <td class=(CELL)>(&c.email)</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(c.orders)</td>
-                            <td class=(CELL.to_string() + " tabular-nums")>(format_price(c.total_cents))</td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (c.orders)
+                            </td>
+                            <td class=(CELL.to_string() + " tabular-nums")>
+                                (format_price(c.total_cents))
+                            </td>
                             <td class=(CELL)>
                                 if c.admin != 0 {
-                                    <span class="rounded-full bg-gin-100 px-2.5 py-0.5 text-xs font-medium text-gin-800">"Admin"</span>
+                                    <span
+                                        class="rounded-full bg-gin-100 px-2.5 py-0.5 text-xs font-medium text-gin-800"
+                                    >
+                                        "Admin"
+                                    </span>
                                 }
                             </td>
                         </tr>
@@ -538,10 +775,21 @@ async fn remove_variant(cx: &Cx, Form(f): Form<VariantTarget>) -> Result<SeeOthe
 #[component]
 async fn photo_card(sku: String) -> Result<impl View> {
     Ok(view! {
-        <form method="post" action="/admin/photo" enctype="multipart/form-data" class="mt-4 flex flex-wrap items-center gap-3">
+        <form
+            method="post"
+            action="/admin/photo"
+            enctype="multipart/form-data"
+            class="mt-4 flex flex-wrap items-center gap-3"
+        >
             <input type="hidden" name="sku" value=(&sku)>
-            <input type="file" name="file" accept="image/*" required="required"
-                   class="text-sm" aria-label="Nouvelle photo">
+            <input
+                type="file"
+                name="file"
+                accept="image/*"
+                required="required"
+                class="text-sm"
+                aria-label="Nouvelle photo"
+            >
             <button class=(BTN)>"Téléverser"</button>
         </form>
         <p class=("mt-3 text-xs ".to_string() + MUTED)>

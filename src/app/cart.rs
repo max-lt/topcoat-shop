@@ -42,14 +42,19 @@ async fn bill(cx: &Cx, version: f64, mode: String) -> Result<impl View> {
 
     Ok(view! {
         if empty {
-            <p class=("text-sm ".to_string() + MUTED)>"Rien à additionner pour l'instant."</p>
+            <p class=("text-sm ".to_string() + MUTED)>
+                "Rien à additionner pour l'instant."
+            </p>
         } else {
             <ul class="space-y-3 text-sm">
                 for l in lines {
                     <li class="flex items-baseline justify-between gap-3">
                         <span class=(MUTED)>
                             (&l.name)
-                            if !l.size.is_empty() { " · " (&l.size) }
+                            if !l.size.is_empty() {
+                                " · "
+                                (&l.size)
+                            }
                             (format!(" × {}", l.quantity))
                         </span>
                         <span class="tabular-nums">(format_price(l.subtotal()))</span>
@@ -65,26 +70,41 @@ async fn bill(cx: &Cx, version: f64, mode: String) -> Result<impl View> {
                 <div class="flex justify-between">
                     <dt class=(MUTED)>"Livraison"</dt>
                     <dd class="tabular-nums">
-                        if free { <span class="text-gin-700">"offerte"</span> } else { (format_price(shipping)) }
+                        if free {
+                            <span class="text-gin-700">"offerte"</span>
+                        } else {
+                            (format_price(shipping))
+                        }
                     </dd>
                 </div>
             </dl>
 
-            <div class="mt-5 flex items-baseline justify-between border-t border-oat-200 pt-5">
+            <div
+                class="mt-5 flex items-baseline justify-between border-t border-oat-200 pt-5"
+            >
                 <span class="font-medium">"Total"</span>
-                <span class="font-display text-3xl tabular-nums">(format_price(subtotal + shipping))</span>
+                <span class="font-display text-3xl tabular-nums">
+                    (format_price(subtotal + shipping))
+                </span>
             </div>
 
             if !free {
                 <div class="mt-4 rounded-xl bg-gin-50 px-4 py-3">
                     <p class="text-sm text-gin-800">
-                        "Plus que " (format_price(missing)) " pour la livraison offerte."
+                        "Plus que "
+                        (format_price(missing))
+                        " pour la livraison offerte."
                     </p>
                     // The fill width rides a typed attr(): a dynamic style=
                     // attribute would trip the hydration bug.
                     <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gin-100">
-                        <div class="h-full rounded-full bg-gin-600 transition-all duration-500"
-                             data-gauge=(format!("{}%", (subtotal * 100 / db::FREE_SHIPPING_CENTS).clamp(0, 100)))></div>
+                        <div
+                            class="h-full rounded-full bg-gin-600 transition-all duration-500"
+                            data-gauge=(format!(
+                                "{}%",
+                                (subtotal * 100 / db::FREE_SHIPPING_CENTS).clamp(0, 100),
+                            ))
+                        ></div>
                     </div>
                 </div>
             }
@@ -111,22 +131,37 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
 
     Ok(view! {
         <li id=(format!("line-{}-{}", &l.sku, &l.size)) class="flex gap-5 py-6">
-            <a href=("/produit/".to_string() + &l.sku)
-               data-bg=(crate::images::background(&l.sku))
-               class="block h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200">
-                <img src=(crate::images::url(&l.sku, 400))
-                     alt=(&l.name)
-                     loading="lazy"
-                     class="h-full w-full object-cover">
+            <a
+                href=("/produit/".to_string() + &l.sku)
+                data-bg=(crate::images::background(&l.sku))
+                class="block h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200"
+            >
+                <img
+                    src=(crate::images::url(&l.sku, 400))
+                    alt=(&l.name)
+                    loading="lazy"
+                    class="h-full w-full object-cover"
+                >
             </a>
 
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <a href=("/produit/".to_string() + &l.sku) class="text-lg transition hover:text-gin-700">(&l.name)</a>
-                    <span class="text-sm tabular-nums">(format_price(l.price_cents)) " l'unité"</span>
+                    <a
+                        href=("/produit/".to_string() + &l.sku)
+                        class="text-lg transition hover:text-gin-700"
+                    >
+                        (&l.name)
+                    </a>
+                    <span class="text-sm tabular-nums">
+                        (format_price(l.price_cents))
+                        " l'unité"
+                    </span>
                 </div>
                 if !l.size.is_empty() {
-                    <p class=("mt-1 text-sm ".to_string() + MUTED)>"Taille " (&l.size)</p>
+                    <p class=("mt-1 text-sm ".to_string() + MUTED)>
+                        "Taille "
+                        (&l.size)
+                    </p>
                 }
 
                 <div class="mt-4 flex items-center gap-4">
@@ -134,50 +169,81 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
                         // The server clamps to the stock; when + changes
                         // nothing, this bubble says why instead of letting
                         // the counter freeze in silence.
-                        <span class="animate-bulle pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
-                              :hidden=$(blocked.get() == 0.0)>
-                            "Il n'y en a que " $(q.get()) " en stock."
+                        <span
+                            class="animate-bulle pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
+                            :hidden=$(blocked.get() == 0.0)
+                        >
+                            "Il n'y en a que "
+                            $(q.get())
+                            " en stock."
                         </span>
-                        <div class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300">
-                            <button aria-label="Diminuer la quantité"
-                                    :class=$(if q.get() <= 0.0 {
-                                        "flex h-9 w-9 select-none items-center justify-center rounded-l-full text-oat-300"
-                                    } else {
-                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-l-full transition hover:bg-oat-100"
-                                    })
-                                    @click=$(async |_e| {
-                                        // Down to zero included: the server retires the
-                                        // line there, and asking again changes nothing.
-                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() - 1.0).await;
-                                        blocked.set(0.0);
-                                        q.set(n);
-                                        version.increment();
-                                    })>"−"</button>
-                            <span class="w-8 text-center text-sm tabular-nums">$(q.get())</span>
-                            <button aria-label="Augmenter la quantité"
-                                    :class=$(if q.get() >= line_stock.get() {
-                                        "flex h-9 w-9 select-none items-center justify-center rounded-r-full text-oat-300"
-                                    } else {
-                                        "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-r-full transition hover:bg-oat-100"
-                                    })
-                                    @click=$(async |_e| {
-                                        // Hidden during the round-trip: the reveal
-                                        // restarts the fade-out animation each time.
-                                        blocked.set(0.0);
-                                        let n = set_quantity(line_sku.get(), line_size.get(), q.get() + 1.0).await;
-                                        blocked.set(if n == q.get() { 1.0 } else { 0.0 });
-                                        q.set(n);
-                                        version.increment();
-                                    })>"+"</button>
+                        <div
+                            class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-oat-300"
+                        >
+                            <button
+                                aria-label="Diminuer la quantité"
+                                :class=$(if q.get() <= 0.0 {
+                                    "flex h-9 w-9 select-none items-center justify-center rounded-l-full text-oat-300"
+                                } else {
+                                    "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-l-full transition hover:bg-oat-100"
+                                })
+                                @click=$(async |_e| {
+                                    // Down to zero included: the server retires the
+                                    // line there, and asking again changes nothing.
+                                    let n = set_quantity(
+                                        line_sku.get(),
+                                        line_size.get(),
+                                        q.get() - 1.0,
+                                    ).await;
+                                    blocked.set(0.0);
+                                    q.set(n);
+                                    version.increment();
+                                })
+                            >
+                                "−"
+                            </button>
+                            <span class="w-8 text-center text-sm tabular-nums">
+                                $(q.get())
+                            </span>
+                            <button
+                                aria-label="Augmenter la quantité"
+                                :class=$(if q.get() >= line_stock.get() {
+                                    "flex h-9 w-9 select-none items-center justify-center rounded-r-full text-oat-300"
+                                } else {
+                                    "flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-r-full transition hover:bg-oat-100"
+                                })
+                                @click=$(async |_e| {
+                                    // Hidden during the round-trip: the reveal
+                                    // restarts the fade-out animation each time.
+                                    blocked.set(0.0);
+                                    let n = set_quantity(
+                                        line_sku.get(),
+                                        line_size.get(),
+                                        q.get() + 1.0,
+                                    ).await;
+                                    blocked.set(if n == q.get() { 1.0 } else { 0.0 });
+                                    q.set(n);
+                                    version.increment();
+                                })
+                            >
+                                "+"
+                            </button>
                         </div>
                     </div>
-                    <button class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)
-                            @click=$(async |_e| {
-                                remove(line_sku.get(), line_size.get()).await;
-                                blocked.set(0.0);
-                                q.set(0.0);
-                                version.increment();
-                            })>"Retirer"</button>
+                    <button
+                        class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+
+                            )
+                            + MUTED)
+                        @click=$(async |_e| {
+                            remove(line_sku.get(), line_size.get()).await;
+                            blocked.set(0.0);
+                            q.set(0.0);
+                            version.increment();
+                        })
+                    >
+                        "Retirer"
+                    </button>
                 </div>
             </div>
         </li>
@@ -199,7 +265,9 @@ async fn cart(cx: &Cx) -> Result<impl View> {
         page_heading(eyebrow: "Panier", title: "Votre sélection", lede: "")
 
         if clamped {
-            <p class="animate-apparition mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">
+            <p
+                class="animate-apparition mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+            >
                 "Quelqu'un a été plus rapide sur les dernières pièces : votre panier \
                  vient d'être ramené aux quantités réellement disponibles."
             </p>
@@ -208,18 +276,21 @@ async fn cart(cx: &Cx) -> Result<impl View> {
         if empty {
             <div class="mt-16 text-center">
                 <p class="text-6xl">"🦀"</p>
-                <p class=("mt-6 text-lg ".to_string() + SOFT)>"Votre panier est vide."</p>
-                <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la collection"</a>
+                <p class=("mt-6 text-lg ".to_string() + SOFT)>
+                    "Votre panier est vide."
+                </p>
+                <a href="/boutique" class=(BTN.to_string() + " mt-8")>
+                    "Voir la collection"
+                </a>
             </div>
         } else {
             <div class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
                 <ul class="divide-y divide-oat-200 border-y border-oat-200">
                     for l in lines {
-
                         cart_line(
                             key: format!("{}-{}", &l.sku, &l.size),
                             l: l,
-                            version: version.clone(),
+                            version: version.clone()
                         )
                     }
                 </ul>
@@ -232,12 +303,29 @@ async fn cart(cx: &Cx) -> Result<impl View> {
                         </div>
 
                         if signed_in {
-                            <a href="/commander" class=(BTN.to_string() + " mt-6 w-full")>"Passer commande"</a>
+                            <a
+                                href="/commander"
+                                class=(BTN.to_string() + " mt-6 w-full")
+                            >
+                                "Passer commande"
+                            </a>
                         } else {
-                            <a href="/connexion" class=(BTN.to_string() + " mt-6 w-full")>"Se connecter pour commander"</a>
-                            <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>"Votre panier vous suivra."</p>
+                            <a
+                                href="/connexion"
+                                class=(BTN.to_string() + " mt-6 w-full")
+                            >
+                                "Se connecter pour commander"
+                            </a>
+                            <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>
+                                "Votre panier vous suivra."
+                            </p>
                         }
-                        <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-3 w-full")>"Continuer mes achats"</a>
+                        <a
+                            href="/boutique"
+                            class=(BTN_OUTLINE.to_string() + " mt-3 w-full")
+                        >
+                            "Continuer mes achats"
+                        </a>
                     </div>
                 </aside>
             </div>
@@ -257,8 +345,14 @@ async fn checkout(cx: &Cx) -> Result<impl View> {
 
     if lines.is_empty() {
         return Ok(view! {
-            page_heading(eyebrow: "Commande", title: "Rien à commander", lede: "Votre panier est vide.")
-            <a href="/boutique" class=(BTN.to_string() + " mt-8")>"Voir la collection"</a>
+            page_heading(
+                eyebrow: "Commande",
+                title: "Rien à commander",
+                lede: "Votre panier est vide."
+            )
+            <a href="/boutique" class=(BTN.to_string() + " mt-8")>
+                "Voir la collection"
+            </a>
         }.boxed());
     }
 
@@ -274,41 +368,91 @@ async fn checkout(cx: &Cx) -> Result<impl View> {
                    une démonstration, et le crabe ne prend pas la carte."
         )
 
-        <form method="post" action="/commander" class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
+        <form
+            method="post"
+            action="/commander"
+            class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]"
+        >
             <div class="space-y-8">
                 <section>
                     <h2 class="text-2xl">"Adresse de livraison"</h2>
-                    <p class=("mt-1 text-sm ".to_string() + MUTED)>"Commande au nom de " (&user.name) "."</p>
+                    <p class=("mt-1 text-sm ".to_string() + MUTED)>
+                        "Commande au nom de "
+                        (&user.name)
+                        "."
+                    </p>
 
                     if has_book {
                         <div class="mt-4 space-y-3">
                             for a in &addresses {
-                                <label class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600">
+                                <label
+                                    class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600"
+                                >
                                     if a.is_default != 0 {
-                                        <input type="radio" name="address_id" value=(a.id) checked="checked" class="mt-1 h-4 w-4 accent-gin-700">
+                                        <input
+                                            type="radio"
+                                            name="address_id"
+                                            value=(a.id)
+                                            checked="checked"
+                                            class="mt-1 h-4 w-4 accent-gin-700"
+                                        >
                                     } else {
-                                        <input type="radio" name="address_id" value=(a.id) class="mt-1 h-4 w-4 accent-gin-700">
+                                        <input
+                                            type="radio"
+                                            name="address_id"
+                                            value=(a.id)
+                                            class="mt-1 h-4 w-4 accent-gin-700"
+                                        >
                                     }
                                     <span class="flex-1">
                                         <span class="block font-medium">(&a.label)</span>
-                                        <span class=("block whitespace-pre-line text-sm ".to_string() + MUTED)>(&a.text)</span>
+                                        <span
+                                            class=("block whitespace-pre-line text-sm ".to_string()
+                                                + MUTED)
+                                        >
+                                            (&a.text)
+                                        </span>
                                     </span>
                                 </label>
                             }
-                            <label class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600">
-                                <input type="radio" name="address_id" value="" class="mt-1 h-4 w-4 accent-gin-700">
+                            <label
+                                class="flex cursor-pointer items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200 has-checked:ring-2 has-checked:ring-gin-600"
+                            >
+                                <input
+                                    type="radio"
+                                    name="address_id"
+                                    value=""
+                                    class="mt-1 h-4 w-4 accent-gin-700"
+                                >
                                 <span class="flex-1">
                                     <span class="block font-medium">"Une autre adresse"</span>
-                                    <span class=("block text-sm ".to_string() + MUTED)>"Saisie ci-dessous."</span>
+                                    <span class=("block text-sm ".to_string() + MUTED)>
+                                        "Saisie ci-dessous."
+                                    </span>
                                 </span>
                             </label>
                         </div>
                     }
 
-                    <textarea name="address" required="required" rows="4" class=(FIELD.to_string() + " mt-4")
-                              placeholder="12 rue de la Marée&#10;29200 Brest">"12 rue de la Marée\n29200 Brest"</textarea>
-                    <label class=("mt-3 flex items-center gap-2 text-sm ".to_string() + MUTED)>
-                        <input type="checkbox" name="save" value="1" class="h-4 w-4 accent-gin-700">
+                    <textarea
+                        name="address"
+                        required="required"
+                        rows="4"
+                        class=(FIELD.to_string() + " mt-4")
+                        placeholder="12 rue de la Marée&#10;29200 Brest"
+                    >
+                        "12 rue de la Marée\n29200 Brest"
+                    </textarea>
+                    <label
+                        class=("mt-3 flex items-center gap-2 text-sm ".to_string()
+                            + MUTED)
+                    >
+                        <input
+                            type="checkbox"
+                            name="save"
+                            value="1"
+                            class="h-4 w-4 accent-gin-700"
+                        >
                         "Enregistrer cette adresse dans mon carnet"
                     </label>
                 </section>
@@ -316,44 +460,68 @@ async fn checkout(cx: &Cx) -> Result<impl View> {
                 <section>
                     <h2 class="text-2xl">"Mode de livraison"</h2>
                     <div class="mt-4 space-y-3">
-                        <label :class=$(if mode.get() == standard.get() {
-                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
-                               } else {
-                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
-                               })>
-                            <input type="radio" name="shipping" value="standard" checked="checked"
-                                   class="h-4 w-4 accent-gin-700"
-                                   @change=$(|_e| mode.set(standard.get()))>
+                        <label
+                            :class=$(if mode.get() == standard.get() {
+                                "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
+                            } else {
+                                "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
+                            })
+                        >
+                            <input
+                                type="radio"
+                                name="shipping"
+                                value="standard"
+                                checked="checked"
+                                class="h-4 w-4 accent-gin-700"
+                                @change=$(|_e| mode.set(standard.get()))
+                            >
                             <span class="flex-1">
                                 <span class="block font-medium">"Standard"</span>
-                                <span class=("block text-sm ".to_string() + MUTED)>"3 à 5 jours ouvrés"</span>
+                                <span class=("block text-sm ".to_string() + MUTED)>
+                                    "3 à 5 jours ouvrés"
+                                </span>
                             </span>
                             <span class="tabular-nums">"4,90 €"</span>
                         </label>
 
-                        <label :class=$(if mode.get() == express.get() {
-                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
-                               } else {
-                                   "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
-                               })>
-                            <input type="radio" name="shipping" value="express"
-                                   class="h-4 w-4 accent-gin-700"
-                                   @change=$(|_e| mode.set(express.get()))>
+                        <label
+                            :class=$(if mode.get() == express.get() {
+                                "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-2 ring-gin-600"
+                            } else {
+                                "flex cursor-pointer items-center gap-4 rounded-2xl bg-white p-5 ring-1 ring-oat-200"
+                            })
+                        >
+                            <input
+                                type="radio"
+                                name="shipping"
+                                value="express"
+                                class="h-4 w-4 accent-gin-700"
+                                @change=$(|_e| mode.set(express.get()))
+                            >
                             <span class="flex-1">
                                 <span class="block font-medium">"Express"</span>
-                                <span class=("block text-sm ".to_string() + MUTED)>"24 à 48 heures"</span>
+                                <span class=("block text-sm ".to_string() + MUTED)>
+                                    "24 à 48 heures"
+                                </span>
                             </span>
                             <span class="tabular-nums">"11,90 €"</span>
                         </label>
                     </div>
                     <p class=("mt-3 text-sm ".to_string() + MUTED)>
-                        "Au-delà de " (format_price(db::FREE_SHIPPING_CENTS)) ", la livraison est offerte quel que soit le mode."
+                        "Au-delà de "
+                        (format_price(db::FREE_SHIPPING_CENTS))
+                        ", la livraison est offerte quel que soit le mode."
                     </p>
                 </section>
 
                 <section>
                     <h2 class="text-2xl">"Paiement"</h2>
-                    <p class=("mt-3 rounded-2xl bg-oat-100 px-5 py-4 text-sm leading-relaxed ".to_string() + SOFT)>
+                    <p
+                        class=("mt-3 rounded-2xl bg-oat-100 px-5 py-4 text-sm leading-relaxed ".to_string(
+
+                            )
+                            + SOFT)
+                    >
                         "Aucun moyen de paiement n'est demandé : valider enregistre la commande, \
                          décrémente le stock et ouvre son suivi, sans qu'un centime ne circule."
                     </p>
@@ -363,11 +531,13 @@ async fn checkout(cx: &Cx) -> Result<impl View> {
             <aside class="lg:sticky lg:top-24 lg:h-fit">
                 <div class=(CARD.to_string() + " p-6")>
                     <p class=(EYEBROW)>"Votre commande"</p>
-                    <div class="mt-5">
-                        bill(version: $(0.0), mode: $(mode.get()))
-                    </div>
-                    <button class=(BTN.to_string() + " mt-6 w-full")>"Valider la commande"</button>
-                    <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>"Retour accepté 30 jours."</p>
+                    <div class="mt-5">bill(version: $(0.0), mode: $(mode.get()))</div>
+                    <button class=(BTN.to_string() + " mt-6 w-full")>
+                        "Valider la commande"
+                    </button>
+                    <p class=("mt-3 text-center text-xs ".to_string() + MUTED)>
+                        "Retour accepté 30 jours."
+                    </p>
                 </div>
             </aside>
         </form>

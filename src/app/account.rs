@@ -37,39 +37,83 @@ async fn sign_in_page(cx: &Cx) -> Result<impl View> {
             )
 
             if !message.is_empty() {
-                <p class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">(message)</p>
+                <p
+                    class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+                >
+                    (message)
+                </p>
             }
 
             <div class="mt-10 grid gap-6 lg:grid-cols-2">
-                <form method="post" action="/connexion" class=(CARD.to_string() + " space-y-5 p-8")>
+                <form
+                    method="post"
+                    action="/connexion"
+                    class=(CARD.to_string() + " space-y-5 p-8")
+                >
                     <h2 class="text-2xl">"J'ai déjà un compte"</h2>
                     <div>
                         <label class="text-sm font-medium">"Email"</label>
-                        <input class=(FIELD.to_string() + " mt-2") type="email" name="email" required="required" placeholder="marie@coquille.fr">
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            type="email"
+                            name="email"
+                            required="required"
+                            placeholder="marie@coquille.fr"
+                        >
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Mot de passe"</label>
-                        <input class=(FIELD.to_string() + " mt-2") type="password" name="password" required="required">
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            type="password"
+                            name="password"
+                            required="required"
+                        >
                     </div>
                     <button class=(BTN.to_string() + " w-full")>"Se connecter"</button>
                 </form>
 
-                <form method="post" action="/inscription" class=(CARD.to_string() + " space-y-5 p-8")>
+                <form
+                    method="post"
+                    action="/inscription"
+                    class=(CARD.to_string() + " space-y-5 p-8")
+                >
                     <h2 class="text-2xl">"Je crée un compte"</h2>
                     <div>
                         <label class="text-sm font-medium">"Nom"</label>
-                        <input class=(FIELD.to_string() + " mt-2") name="name" required="required" placeholder="Marie Carapace">
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            name="name"
+                            required="required"
+                            placeholder="Marie Carapace"
+                        >
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Email"</label>
-                        <input class=(FIELD.to_string() + " mt-2") type="email" name="email" required="required" placeholder="marie@coquille.fr">
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            type="email"
+                            name="email"
+                            required="required"
+                            placeholder="marie@coquille.fr"
+                        >
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Mot de passe"</label>
-                        <input class=(FIELD.to_string() + " mt-2") type="password" name="password" required="required" minlength="8">
-                        <p class=("mt-2 text-xs ".to_string() + MUTED)>"Huit caractères au moins."</p>
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            type="password"
+                            name="password"
+                            required="required"
+                            minlength="8"
+                        >
+                        <p class=("mt-2 text-xs ".to_string() + MUTED)>
+                            "Huit caractères au moins."
+                        </p>
                     </div>
-                    <button class=(BTN.to_string() + " w-full")>"Créer mon compte"</button>
+                    <button class=(BTN.to_string() + " w-full")>
+                        "Créer mon compte"
+                    </button>
                 </form>
             </div>
         </div>
@@ -180,20 +224,40 @@ async fn account(cx: &Cx) -> Result<impl View> {
                             <div class="flex items-baseline justify-between gap-3">
                                 <span class="font-medium">(&a.label)</span>
                                 if a.is_default != 0 {
-                                    <span class="rounded-full bg-gin-100 px-2.5 py-0.5 text-xs font-medium text-gin-800">"Par défaut"</span>
+                                    <span
+                                        class="rounded-full bg-gin-100 px-2.5 py-0.5 text-xs font-medium text-gin-800"
+                                    >
+                                        "Par défaut"
+                                    </span>
                                 }
                             </div>
-                            <p class=("mt-2 whitespace-pre-line text-sm ".to_string() + SOFT)>(&a.text)</p>
+                            <p
+                                class=("mt-2 whitespace-pre-line text-sm ".to_string()
+                                    + SOFT)
+                            >
+                                (&a.text)
+                            </p>
                             <div class="mt-4 flex gap-4 text-sm">
                                 if a.is_default == 0 {
                                     <form method="post" action="/adresses/defaut">
                                         <input type="hidden" name="id" value=(a.id)>
-                                        <button class="underline underline-offset-4 transition hover:text-gin-700">"Par défaut"</button>
+                                        <button
+                                            class="underline underline-offset-4 transition hover:text-gin-700"
+                                        >
+                                            "Par défaut"
+                                        </button>
                                     </form>
                                 }
                                 <form method="post" action="/adresses/supprimer">
                                     <input type="hidden" name="id" value=(a.id)>
-                                    <button class=("underline underline-offset-4 transition hover:text-brique-700 ".to_string() + MUTED)>"Supprimer"</button>
+                                    <button
+                                        class=("underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+
+                                            )
+                                            + MUTED)
+                                    >
+                                        "Supprimer"
+                                    </button>
                                 </form>
                             </div>
                         </li>
@@ -202,15 +266,34 @@ async fn account(cx: &Cx) -> Result<impl View> {
             }
 
             <details class="mt-6">
-                <summary class=("text-sm underline underline-offset-4 ".to_string() + MUTED)>"Ajouter une adresse"</summary>
-                <form method="post" action="/adresses" class=(CARD.to_string() + " mt-4 max-w-xl space-y-4 p-6")>
+                <summary
+                    class=("text-sm underline underline-offset-4 ".to_string() + MUTED)
+                >
+                    "Ajouter une adresse"
+                </summary>
+                <form
+                    method="post"
+                    action="/adresses"
+                    class=(CARD.to_string() + " mt-4 max-w-xl space-y-4 p-6")
+                >
                     <div>
                         <label class="text-sm font-medium">"Libellé"</label>
-                        <input class=(FIELD.to_string() + " mt-2") name="label" required="required" placeholder="Chez moi, Bureau…">
+                        <input
+                            class=(FIELD.to_string() + " mt-2")
+                            name="label"
+                            required="required"
+                            placeholder="Chez moi, Bureau…"
+                        >
                     </div>
                     <div>
                         <label class="text-sm font-medium">"Adresse"</label>
-                        <textarea class=(FIELD.to_string() + " mt-2") name="text" required="required" rows="3" placeholder="12 rue de la Marée&#10;29200 Brest"></textarea>
+                        <textarea
+                            class=(FIELD.to_string() + " mt-2")
+                            name="text"
+                            required="required"
+                            rows="3"
+                            placeholder="12 rue de la Marée&#10;29200 Brest"
+                        ></textarea>
                     </div>
                     <button class=(BTN_OUTLINE)>"Enregistrer"</button>
                 </form>
@@ -222,7 +305,10 @@ async fn account(cx: &Cx) -> Result<impl View> {
                 <h2 class="text-3xl">"Vos commandes"</h2>
                 if !no_orders {
                     <span class=("text-sm ".to_string() + MUTED)>
-                        (format!("{how_many} commande{}", if how_many > 1 { "s" } else { "" }))
+                        (format!(
+                            "{how_many} commande{}",
+                            if how_many > 1 { "s" } else { "" },
+                        ))
                     </span>
                 }
             </div>
@@ -230,17 +316,28 @@ async fn account(cx: &Cx) -> Result<impl View> {
             if no_orders {
                 <div class=(CARD.to_string() + " mt-8 p-16 text-center")>
                     <p class=(SOFT)>"Aucune commande pour l'instant."</p>
-                    <a href="/boutique" class=(BTN.to_string() + " mt-6")>"Voir la collection"</a>
+                    <a href="/boutique" class=(BTN.to_string() + " mt-6")>
+                        "Voir la collection"
+                    </a>
                 </div>
             } else {
                 <ul class="mt-8 divide-y divide-oat-200 border-y border-oat-200">
                     for o in orders {
-                        <a href=("/commande/".to_string() + &o.reference) class="block transition hover:bg-oat-100">
+                        <a
+                            href=("/commande/".to_string() + &o.reference)
+                            class="block transition hover:bg-oat-100"
+                        >
                             <li class="flex flex-wrap items-center gap-4 px-2 py-5">
-                                <span class="font-medium tabular-nums">(&o.reference)</span>
+                                <span class="font-medium tabular-nums">
+                                    (&o.reference)
+                                </span>
                                 status_badge(status: o.status.clone())
-                                <span class=("text-sm ".to_string() + MUTED)>(o.created_at.get(..10).unwrap_or_default().to_string())</span>
-                                <span class="ml-auto tabular-nums">(format_price(o.total_cents))</span>
+                                <span class=("text-sm ".to_string() + MUTED)>
+                                    (o.created_at.get(..10).unwrap_or_default().to_string())
+                                </span>
+                                <span class="ml-auto tabular-nums">
+                                    (format_price(o.total_cents))
+                                </span>
                                 <span class="text-gin-700">"→"</span>
                             </li>
                         </a>
