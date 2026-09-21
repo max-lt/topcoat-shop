@@ -13,7 +13,12 @@ use topcoat_shop::{db, images};
 
 #[tokio::main]
 async fn main() {
-    let assets = AssetBundle::load().unwrap();
+    // The bundle sits next to the binary, so a release build needs its own.
+    // The error names the directory it looked in, which says which is missing.
+    let assets = AssetBundle::load().expect(
+        "run `topcoat asset bundle --bin topcoat-shop` first, \
+         with --release for the release binary",
+    );
     let pool = db::connect(&std::env::var("DATABASE_URL").unwrap_or("shop.db".into()))
         .await
         .expect("database");
