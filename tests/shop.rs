@@ -705,3 +705,100 @@ async fn an_admin_reaches_the_back_office_and_can_change_a_price() {
         .expect("price");
     assert_eq!(cents, 4200, "the price did not move");
 }
+
+#[tokio::test]
+async fn an_order_needs_an_address() {
+    let mut shop = Shop::open().await;
+    shop.sign_up("sans-adresse@bernard.sh").await;
+    let cart = shop
+        .jar
+        .iter()
+        .find(|(k, _)| k == "cart")
+        .map(|(_, v)| v.clone())
+        .expect("cart cookie");
+    let pool = db::connect(&shop.pool()).await.expect("database");
+    sqlx::query("insert or ignore into carts (id, created_at) values (?1, datetime('now'))")
+        .bind(&cart)
+        .execute(&pool)
+        .await
+        .expect("cart");
+    sqlx::query(
+        "insert into cart_lines (cart_id, sku, size, quantity) values (?1, 'COQ-MUG', '', 1)",
+    )
+    .bind(&cart)
+    .execute(&pool)
+    .await
+    .expect("line");
+
+    let page = shop
+        .post(
+            "/commander",
+            &[("address", "   "), ("shipping", "standard")],
+        )
+        .await;
+
+    let placed: i64 = sqlx::query_scalar("select count(*) from orders")
+        .fetch_one(&pool)
+        .await
+        .expect("count");
+    assert_eq!(
+        placed, 0,
+        "an order went through with no address: {:?}",
+        page.location
+    );
+}
+
+/// The POST answers on the checkout path itself: the form comes back with
+/// the reason, and no route exists just to send a 303.
+#[tokio::test]
+async fn a_refused_order_comes_back_with_the_form() {
+    let mut shop = Shop::open().await;
+    shop.sign_up("forme@bernard.sh").await;
+    let cart = shop
+        .jar
+        .iter()
+        .find(|(k, _)| k == "cart")
+        .map(|(_, v)| v.clone())
+        .expect("cart cookie");
+    let pool = db::connect(&shop.pool()).await.expect("database");
+    sqlx::query("insert or ignore into carts (id, created_at) values (?1, datetime('now'))")
+        .bind(&cart)
+        .execute(&pool)
+        .await
+        .expect("cart");
+    sqlx::query(
+        "insert into cart_lines (cart_id, sku, size, quantity) values (?1, 'COQ-MUG', '', 1)",
+    )
+    .bind(&cart)
+    .execute(&pool)
+    .await
+    .expect("line");
+
+    let page = shop
+        .post("/commander", &[("address", ""), ("shipping", "standard")])
+        .await;
+    page.assert_ok("the refused order");
+    assert_eq!(page.location, None, "a refused order redirected");
+    assert!(page.contains("Il manque une adresse de livraison."));
+    assert!(
+        page.contains("Livraison et paiement"),
+        "the form did not come back"
+    );
+
+    // With an address it goes through, and that one does redirect.
+    let page = shop
+        .post(
+            "/commander",
+            &[
+                ("address", "12 quai de la Douane"),
+                ("shipping", "standard"),
+            ],
+        )
+        .await;
+    assert_eq!(page.status, StatusCode::SEE_OTHER);
+    assert!(
+        page.location
+            .as_deref()
+            .is_some_and(|l| l.starts_with("/commande/"))
+    );
+}

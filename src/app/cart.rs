@@ -4,8 +4,8 @@
 //! never the browser's arithmetic.
 
 use topcoat::context::Cx;
-use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
-use topcoat::router::{content::Form, page, query_params, route};
+use topcoat::router::error::{see_other, RouterErrorExt};
+use topcoat::router::{content::Form, page, query_params};
 use topcoat::runtime::{procedure, shard, signal, Signal};
 use topcoat::view::{component, view, View, ViewExt};
 use topcoat::Result;
@@ -337,8 +337,25 @@ async fn cart(cx: &Cx) -> Result<impl View> {
 
 #[page("/commander")]
 async fn checkout(cx: &Cx) -> Result<impl View> {
+    // The cart cookie is minted here rather than in the form: writing to the
+    // jar is a response header, and a component body runs while the response
+    // is being rendered.
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
-    let id = current_cart(cx);
+    let cart_id = current_cart(cx);
+
+    Ok(view! { checkout_form(user: user, cart_id: cart_id, problem: String::new()) })
+}
+
+/// The checkout form, answered by the GET and again by the POST when it has
+/// something to say about what was submitted.
+#[component]
+async fn checkout_form(
+    cx: &Cx,
+    user: db::User,
+    cart_id: String,
+    problem: String,
+) -> Result<impl View> {
+    let id = cart_id;
     let lines = db::cart_lines(pool(cx), &id).await?;
     let addresses = db::addresses(pool(cx), user.id).await?;
     let has_book = !addresses.is_empty();
@@ -367,6 +384,12 @@ async fn checkout(cx: &Cx) -> Result<impl View> {
             lede: "Dernière étape. Aucun paiement réel n'est demandé : cette boutique est \
                    une démonstration, et le crabe ne prend pas la carte."
         )
+
+        if !problem.is_empty() {
+            <p class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">
+                (&problem)
+            </p>
+        }
 
         <form
             method="post"
@@ -557,8 +580,11 @@ struct CheckoutForm {
 
 /// A plain form POST: it works without JavaScript, and the redirect
 /// afterwards keeps a refresh from ordering twice.
-#[route(POST "/commander")]
-async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<SeeOther> {
+/// 0.8.1 made `SeeOther` an error as well as a response, so a page can answer
+/// a submission with a 303 through `Err`. The form and the submission share
+/// one path, and the redirect needs no route of its own.
+#[page(POST "/commander")]
+async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<impl View> {
     let user = current_user(cx).await?.ok_or_redirect("/connexion")?;
     let id = current_cart(cx);
 
@@ -574,13 +600,25 @@ async fn place_order(cx: &Cx, Form(choice): Form<CheckoutForm>) -> Result<SeeOth
         text
     };
 
+    // The browser marks the field required; nothing says the request came
+    // from the browser. An order with no address cannot be delivered.
+    if address.trim().is_empty() {
+        return Ok(view! {
+            checkout_form(
+                user: user,
+                cart_id: id,
+                problem: "Il manque une adresse de livraison.".to_string()
+            )
+        });
+    }
+
     let Some(reference) =
         db::place_order(pool(cx), user.id, &id, &address, &choice.shipping).await?
     else {
         // Someone else took the last units first: the cart was clamped,
         // the visitor goes back to see what is really left.
-        return Ok(see_other("/panier?ajuste=1"));
+        return Err(see_other("/panier?ajuste=1").into());
     };
     forget_cart(cx);
-    Ok(see_other(format!("/commande/{reference}")))
+    Err(see_other(format!("/commande/{reference}")).into())
 }
