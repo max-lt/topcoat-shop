@@ -1,4 +1,5 @@
-//! Two build steps: Tailwind, and the commit the binary carries.
+//! Two build steps: Tailwind, and what the binary knows about its own
+//! build: the commit it came from and when it was made.
 //!
 //! Tailwind's input has to be named explicitly -- the default is a generated
 //! file that only imports Tailwind, which would drop our theme tokens.
@@ -22,6 +23,14 @@ fn main() {
         }
     }
     println!("cargo::rustc-env=SHOP_COMMIT={}", commit());
+    // When this binary was made. The build only reruns when one of the
+    // inputs above changes, so the stamp belongs to the last real build
+    // rather than to the last `cargo build` that found nothing to do.
+    let built = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is behind 1970")
+        .as_secs();
+    println!("cargo::rustc-env=SHOP_BUILDTIME={built}");
 
     topcoat::tailwind::BuildConfig::new()
         .input("assets/site.src.css")

@@ -28,9 +28,11 @@ fn started_at() -> i64 {
 
 #[derive(Serialize)]
 struct Health {
+    /// Unix seconds. Subtract it from `timestamp` for the age of the build,
+    /// which is the one age a Worker can report about its deployment.
+    buildtime: i64,
     /// Empty when the build had no git to ask for it.
     commit: &'static str,
-    status: &'static str,
     timestamp: i64,
     uptime: i64,
     version: &'static str,
@@ -41,8 +43,8 @@ async fn health(_: &Cx) -> Result<Json<Health>> {
     let now = Utc::now().timestamp();
 
     Ok(Json(Health {
+        buildtime: env!("SHOP_BUILDTIME").parse().unwrap_or(0),
         commit: env!("SHOP_COMMIT"),
-        status: "ok",
         timestamp: now,
         // The clock can go backwards between two reads, and a negative
         // uptime is not a thing a probe should have to parse.

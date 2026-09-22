@@ -813,8 +813,8 @@ async fn the_health_endpoint_reports_the_build() {
 
     let body: serde_json::Value = serde_json::from_str(&page.html).expect("the answer is json");
 
-    assert_eq!(body["status"], "ok");
     assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+    assert!(body.get("status").is_none(), "status says nothing the http code does not");
 
     // Six characters of the commit, or nothing when the build had no git.
     let commit = body["commit"].as_str().expect("commit is a string");
@@ -833,6 +833,16 @@ async fn the_health_endpoint_reports_the_build() {
 
     let uptime = body["uptime"].as_i64().expect("uptime is a number");
     assert!(uptime >= 0, "uptime is {uptime}");
+
+    // The build cannot be from the future, and this one is minutes old at
+    // most: the tests run against a binary cargo just made.
+    let buildtime = body["buildtime"].as_i64().expect("buildtime is a number");
+    assert!(buildtime > 0, "buildtime is {buildtime}");
+    assert!(buildtime <= now, "the build is dated {buildtime}, the clock says {now}");
+    assert!(
+        now - buildtime < 60 * 60 * 24 * 365,
+        "the build is dated {buildtime}, which is over a year before now"
+    );
 
     // No shell, no session: a probe gets json and nothing else.
     assert!(
