@@ -15,6 +15,7 @@ use topcoat::Result;
 use crate::db::{self, format_price, Product};
 
 pub mod account;
+pub mod api;
 pub mod admin;
 pub mod cart;
 pub mod context;

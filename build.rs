@@ -1,4 +1,4 @@
-//! One build step: Tailwind.
+//! Two build steps: Tailwind, and the commit the binary carries.
 //!
 //! Tailwind's input has to be named explicitly -- the default is a generated
 //! file that only imports Tailwind, which would drop our theme tokens.
@@ -10,9 +10,34 @@ fn main() {
     // file in migrations/ must force a recompile or the binary boots blind
     // to it.
     println!("cargo::rerun-if-changed=migrations");
+    // The commit /api/v1/health reports. HEAD moves when the branch does,
+    // and the ref file when a commit lands on it.
+    println!("cargo::rerun-if-changed=.git/HEAD");
+    for line in std::fs::read_to_string(".git/HEAD")
+        .unwrap_or_default()
+        .lines()
+    {
+        if let Some(reference) = line.strip_prefix("ref: ") {
+            println!("cargo::rerun-if-changed=.git/{reference}");
+        }
+    }
+    println!("cargo::rustc-env=SHOP_COMMIT={}", commit());
 
     topcoat::tailwind::BuildConfig::new()
         .input("assets/site.src.css")
         .render()
         .unwrap();
+}
+
+/// The short commit hash, or an empty string where there is no git to ask:
+/// a build from a tarball, or one from a directory that was never a repo.
+fn commit() -> String {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--short=6", "HEAD"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|hash| hash.trim().to_string())
+        .unwrap_or_default()
 }

@@ -15,6 +15,8 @@ use topcoat_shop::{db, images};
 async fn main() {
     // The bundle sits next to the binary, so a release build needs its own.
     // The error names the directory it looked in, which says which is missing.
+    topcoat_shop::app::api::mark_start();
+
     let assets = AssetBundle::load().expect(
         "run `topcoat asset bundle --bin topcoat-shop` first, \
          with --release for the release binary",

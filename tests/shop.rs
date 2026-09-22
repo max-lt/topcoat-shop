@@ -802,3 +802,41 @@ async fn a_refused_order_comes_back_with_the_form() {
             .is_some_and(|l| l.starts_with("/commande/"))
     );
 }
+
+// --- what watches from outside
+
+#[tokio::test]
+async fn the_health_endpoint_reports_the_build() {
+    let mut shop = Shop::open().await;
+    let page = shop.get("/api/v1/health").await;
+    page.assert_ok("/api/v1/health");
+
+    let body: serde_json::Value = serde_json::from_str(&page.html).expect("the answer is json");
+
+    assert_eq!(body["status"], "ok");
+    assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+
+    // Six characters of the commit, or nothing when the build had no git.
+    let commit = body["commit"].as_str().expect("commit is a string");
+    assert!(
+        commit.is_empty() || commit.len() == 6,
+        "commit is {commit:?}, neither empty nor six characters"
+    );
+
+    // A timestamp a probe can compare against its own clock.
+    let now = chrono::Utc::now().timestamp();
+    let stamp = body["timestamp"].as_i64().expect("timestamp is a number");
+    assert!(
+        (now - stamp).abs() < 60,
+        "timestamp is {stamp}, the clock says {now}"
+    );
+
+    let uptime = body["uptime"].as_i64().expect("uptime is a number");
+    assert!(uptime >= 0, "uptime is {uptime}");
+
+    // No shell, no session: a probe gets json and nothing else.
+    assert!(
+        !page.contains("<html"),
+        "the health endpoint wears the shell"
+    );
+}
