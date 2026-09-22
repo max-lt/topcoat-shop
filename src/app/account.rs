@@ -2,9 +2,9 @@
 //! are plain POSTs so the whole flow works with JavaScript switched off --
 //! the session cookie has to be set on a response either way.
 
-use topcoat::context::Cx;
-use topcoat::router::error::{redirect, see_other, RouterErrorExt, SeeOther};
-use topcoat::router::{content::Form, page, query_params, route};
+use topcoat::context::{try_request_context, Cx};
+use topcoat::router::error::{redirect, rewrite, see_other, RouterErrorExt, SeeOther};
+use topcoat::router::{content::Form, page, route, Body, Method};
 use topcoat::session;
 use topcoat::view::{view, View};
 use topcoat::Result;
@@ -14,9 +14,23 @@ use crate::app::orders::status_badge;
 use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
-#[query_params(error = bad_request)]
-struct Message {
-    err: Option<String>,
+/// What a refused submission hands back to the page it came from. The
+/// router carries it on the request context of the rewritten dispatch, so
+/// the message never reaches the URL and never survives a bookmark.
+#[derive(Clone)]
+struct Refused(&'static str);
+
+/// Re-runs `/connexion` as a GET, carrying the reason it refused.
+///
+/// A refusal answers in place rather than redirecting, so a reload
+/// re-submits the form. That is what Post/Redirect/Get exists to avoid, and
+/// it costs nothing here: submitting a rejected password again is rejected
+/// again. A submission that succeeds still redirects.
+fn refuse(cx: &Cx, why: &'static str) -> topcoat::Error {
+    rewrite("/connexion", Body::empty())
+        .method(Method::GET)
+        .cx(cx.with(Refused(why)))
+        .into()
 }
 
 #[page("/connexion")]
@@ -24,7 +38,7 @@ async fn sign_in_page(cx: &Cx) -> Result<impl View> {
     if current_user(cx).await?.is_some() {
         return Err(redirect("/compte").into());
     }
-    let message = query_params::<Message>(cx)?.err.clone().unwrap_or_default();
+    let message = try_request_context::<Refused>(cx).map(|r| r.0).unwrap_or_default();
 
     Ok(view! {
         <div class="mx-auto max-w-4xl">
@@ -47,7 +61,7 @@ async fn sign_in_page(cx: &Cx) -> Result<impl View> {
             <div class="mt-10 grid gap-6 lg:grid-cols-2">
                 <form
                     method="post"
-                    action="/connexion"
+                    action="/connexion/verifier"
                     class=(CARD.to_string() + " space-y-5 p-8")
                 >
                     <h2 class="text-2xl">"J'ai déjà un compte"</h2>
@@ -135,10 +149,13 @@ struct Registration {
 
 /// Signing in mints a fresh token (Topcoat's side) and records its hash
 /// (ours), then claims whatever the anonymous cart held.
-#[route(POST "/connexion")]
+/// The submission has a path of its own because a refusal rewrites onto
+/// `/connexion`, and the router refuses a rewrite back to the path the
+/// request already came in on.
+#[route(POST "/connexion/verifier")]
 async fn sign_in(cx: &Cx, Form(f): Form<Credentials>) -> Result<SeeOther> {
     let Some(user) = db::verify_credentials(pool(cx), &f.email, &f.password).await? else {
-        return Ok(see_other("/connexion?err=Identifiants+incorrects."));
+        return Err(refuse(cx, "Identifiants incorrects."));
     };
     start_session(cx, user.id).await?;
     Ok(see_other("/compte"))
@@ -147,10 +164,10 @@ async fn sign_in(cx: &Cx, Form(f): Form<Credentials>) -> Result<SeeOther> {
 #[route(POST "/inscription")]
 async fn register(cx: &Cx, Form(f): Form<Registration>) -> Result<SeeOther> {
     if f.password.len() < 8 {
-        return Ok(see_other("/connexion?err=Mot+de+passe+trop+court."));
+        return Err(refuse(cx, "Mot de passe trop court."));
     }
     if db::email_taken(pool(cx), &f.email).await? {
-        return Ok(see_other("/connexion?err=Cet+email+a+déjà+un+compte."));
+        return Err(refuse(cx, "Cet email a déjà un compte."));
     }
     let user = db::register(pool(cx), &f.email, &f.name, &f.password).await?;
     start_session(cx, user.id).await?;

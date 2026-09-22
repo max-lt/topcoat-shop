@@ -389,7 +389,7 @@ async fn a_visitor_can_sign_up_sign_out_and_sign_back_in() {
 
     let page = shop
         .post(
-            "/connexion",
+            "/connexion/verifier",
             &[
                 ("email", "nouvelle@bernard.sh"),
                 ("password", "motdepasse123"),
@@ -408,17 +408,23 @@ async fn the_wrong_password_does_not_open_a_session() {
 
     let page = shop
         .post(
-            "/connexion",
+            "/connexion/verifier",
             &[("email", "titulaire@bernard.sh"), ("password", "faux")],
         )
         .await;
 
+    // The POST is rewritten back onto its own page as a GET, so the answer is
+    // the form again with the reason on it. Nothing redirects, and the reason
+    // is not in the URL where a bookmark would keep it.
+    page.assert_ok("the refused sign-in");
+    assert_eq!(page.location, None, "a refused sign-in redirected");
     assert!(
-        page.location
-            .as_deref()
-            .is_some_and(|l| l.starts_with("/connexion")),
-        "a wrong password went to {:?}",
-        page.location
+        page.contains("Identifiants incorrects."),
+        "the page does not say why"
+    );
+    assert!(
+        page.contains("J'ai déjà un compte"),
+        "the form did not come back"
     );
     assert_eq!(
         shop.get("/compte").await.status,
@@ -433,10 +439,14 @@ async fn an_email_is_taken_only_once() {
     shop.post("/deconnexion", &[]).await;
 
     let page = shop.sign_up("unique@bernard.sh").await;
-    assert_ne!(
-        page.location.as_deref(),
-        Some("/compte"),
-        "a second sign-up on one email opened a session"
+    page.assert_ok("the refused sign-up");
+    assert!(
+        page.contains("Cet email a déjà un compte."),
+        "the page does not say why"
+    );
+    assert_eq!(
+        shop.get("/compte").await.status,
+        StatusCode::TEMPORARY_REDIRECT
     );
 }
 
