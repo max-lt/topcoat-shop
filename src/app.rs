@@ -113,13 +113,6 @@ pub async fn product_tile(p: Product) -> Result<impl View> {
 
 // --- shell
 
-const NAV: [(&str, &str); 4] = [
-    ("/boutique", "Boutique"),
-    ("/journal", "Journal"),
-    ("/maison", "La maison"),
-    ("/aide", "Aide"),
-];
-
 /// The page's title, derived from the URL: pages render before the layout
 /// wraps them and the request context is read-only, so the path is the one
 /// channel that is always there.
@@ -264,6 +257,16 @@ async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
 
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
+    // Which nav entry points at the page being served. The router answers
+    // that from the route it matched, not from a string, so /boutique stays
+    // current while it is filtered or paginated.
+    let nav = [
+        ("/boutique", "Boutique", href!("/boutique").is_current(cx)),
+        ("/journal", "Journal", href!("/journal").is_current(cx)),
+        ("/maison", "La maison", href!("/maison").is_current(cx)),
+        ("/aide", "Aide", href!("/aide").is_current(cx)),
+    ];
+
     let visitor = current_user(cx).await?;
     let signed_in = visitor.is_some();
     let is_admin = visitor.as_ref().is_some_and(|u| u.admin != 0);
@@ -376,10 +379,15 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     >
                                 </form>
                                 <nav class="mt-2">
-                                    for (href, label) in NAV {
+                                    for (href, label, current) in nav {
                                         <a
                                             href=(href)
-                                            class="block rounded-xl px-4 py-2.5 text-sm transition hover:bg-oat-100"
+                                            aria-current=(if current { "page" } else { "" })
+                                            class=(if current {
+                                                "block rounded-xl bg-oat-100 px-4 py-2.5 text-sm font-medium"
+                                            } else {
+                                                "block rounded-xl px-4 py-2.5 text-sm transition hover:bg-oat-100"
+                                            })
                                         >
                                             (label)
                                         </a>
@@ -400,8 +408,16 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                         </a>
 
                         <nav class="hidden items-center gap-7 text-sm md:flex">
-                            for (href, label) in NAV {
-                                <a href=(href) class="transition hover:text-gin-700">
+                            for (href, label, current) in nav {
+                                <a
+                                    href=(href)
+                                    aria-current=(if current { "page" } else { "" })
+                                    class=(if current {
+                                        "font-medium text-gin-800 underline underline-offset-8"
+                                    } else {
+                                        "transition hover:text-gin-700"
+                                    })
+                                >
                                     (label)
                                 </a>
                             }

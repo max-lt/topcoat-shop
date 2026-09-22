@@ -369,6 +369,47 @@ async fn the_seen_shelf_follows_the_visitor() {
     );
 }
 
+/// The nav marks the page being served, and marks it from the route the
+/// router matched rather than from the request path.
+#[tokio::test]
+async fn the_nav_marks_the_page_being_served() {
+    let mut shop = Shop::open().await;
+
+    // Two links per page, the desktop nav and the mobile one.
+    let shelf = shop.get("/boutique").await;
+    shelf.assert_ok("/boutique");
+    assert_eq!(
+        shelf.count("aria-current=\"page\""),
+        2,
+        "the shop is not marked"
+    );
+
+    let journal = shop.get("/journal").await;
+    assert_eq!(
+        journal.count("aria-current=\"page\""),
+        2,
+        "the journal is not marked"
+    );
+
+    // A filtered shop is still the shop: the query does not move the mark.
+    let filtered = shop.get("/boutique?categorie=Vestiaire").await;
+    filtered.assert_ok("/boutique?categorie=Vestiaire");
+    assert_eq!(
+        filtered.count("aria-current=\"page\""),
+        2,
+        "a filter lost the mark"
+    );
+
+    // A page outside the nav marks nothing, and neither does a 404.
+    assert_eq!(shop.get("/panier").await.count("aria-current=\"page\""), 0);
+    assert_eq!(
+        shop.get("/rien-du-tout")
+            .await
+            .count("aria-current=\"page\""),
+        0
+    );
+}
+
 // --- accounts
 
 #[tokio::test]
