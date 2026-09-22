@@ -313,6 +313,62 @@ async fn a_trailing_slash_redirects_to_the_declared_path() {
     assert_eq!(page.location.as_deref(), Some("/boutique"));
 }
 
+/// The hero does not wait on the queries below it. The three shelves are
+/// live regions, so their markup reaches the stream after the part the
+/// visitor came for.
+#[tokio::test]
+async fn the_product_page_sends_its_hero_before_the_shelves() {
+    let mut shop = Shop::open().await;
+    let page = shop.get("/produit/COQ-TSHIRT").await;
+    page.assert_ok("/produit/COQ-TSHIRT");
+
+    let hero = page
+        .html
+        .find("Ajouter au panier")
+        .expect("the hero is missing");
+    let reviews = page
+        .html
+        .find("id=\"avis\"")
+        .expect("the reviews section is missing");
+    assert!(hero < reviews, "the reviews came before the hero");
+
+    // A suspended region puts its fallback in the stream and its content
+    // after, so each heading goes out twice. Rendered inline it would go out
+    // once, which is what tells the two apart.
+    assert_eq!(page.count("Les avis"), 2, "the reviews did not stream");
+    assert_eq!(
+        page.count("À voir aussi"),
+        2,
+        "the related shelf did not stream"
+    );
+    assert!(
+        page.contains("animate-pulse"),
+        "no shelf placeholder went out"
+    );
+}
+
+/// The shelf is fed by a cookie the page writes, and a single query. It
+/// shows what came before this page, never this page.
+#[tokio::test]
+async fn the_seen_shelf_follows_the_visitor() {
+    let mut shop = Shop::open().await;
+
+    let first = shop.get("/produit/COQ-MUG").await;
+    first.assert_ok("/produit/COQ-MUG");
+    assert!(
+        !first.contains("Déjà regardés"),
+        "the first page shows a shelf of nothing"
+    );
+
+    let second = shop.get("/produit/COQ-TSHIRT").await;
+    second.assert_ok("/produit/COQ-TSHIRT");
+    assert_eq!(second.count("Déjà regardés"), 2, "the shelf did not stream");
+    assert!(
+        second.contains("/produit/COQ-MUG"),
+        "the mug is missing from the shelf"
+    );
+}
+
 // --- accounts
 
 #[tokio::test]

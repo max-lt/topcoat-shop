@@ -172,6 +172,22 @@ pub async fn product(_: Db, sku: &str) -> Result<Option<Product>, Error> {
     fetch_first(&format!("select {PRODUCT_FIELDS} from products where sku = ?1"), &[s(sku)]).await
 }
 
+/// The products named, in the order they were named, skipping any that no
+/// longer exist. One query rather than one per sku.
+pub async fn products(_: Db, skus: &[String]) -> Result<Vec<Product>, Error> {
+    if skus.is_empty() {
+        return Ok(Vec::new());
+    }
+    let holes = vec!["?"; skus.len()].join(", ");
+    let binds: Vec<JsValue> = skus.iter().map(|sku| s(sku)).collect();
+    let found: Vec<Product> = fetch_all(
+        &format!("select {PRODUCT_FIELDS} from products where sku in ({holes})"),
+        &binds,
+    )
+    .await?;
+    Ok(skus.iter().filter_map(|sku| found.iter().find(|p| &p.sku == sku).cloned()).collect())
+}
+
 pub async fn related_products(_: Db, sku: &str, category: &str) -> Result<Vec<Product>, Error> {
     fetch_all(
         &format!(

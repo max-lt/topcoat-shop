@@ -74,6 +74,23 @@ pub async fn product(pool: &SqlitePool, sku: &str) -> Result<Option<Product>, Er
     .await?)
 }
 
+/// The products named, in the order they were named, skipping any that no
+/// longer exist. One query rather than one per sku.
+pub async fn products(pool: &SqlitePool, skus: &[String]) -> Result<Vec<Product>, Error> {
+    if skus.is_empty() {
+        return Ok(Vec::new());
+    }
+    let holes = vec!["?"; skus.len()].join(", ");
+    let mut query = sqlx::query_as::<_, Product>(AssertSqlSafe(format!(
+        "select {PRODUCT_FIELDS} from products where sku in ({holes})"
+    )));
+    for sku in skus {
+        query = query.bind(sku);
+    }
+    let found = query.fetch_all(pool).await?;
+    Ok(skus.iter().filter_map(|sku| found.iter().find(|p| &p.sku == sku).cloned()).collect())
+}
+
 /// Same shelf first, then the rest of the shop.
 pub async fn related_products(
     pool: &SqlitePool,
