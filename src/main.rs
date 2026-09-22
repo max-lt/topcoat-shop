@@ -4,7 +4,7 @@ use tokio::net::TcpListener;
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::router::{BodyLimit, Router, RouterBuilderDiscoverExt};
+use topcoat::router::{BodyLimit, Router, RouterBuilderDiscoverExt, TrailingSlash};
 use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
@@ -27,6 +27,10 @@ async fn main() {
     march_parcels(pool.clone());
 
     let router = Router::builder()
+        // The sitemap names one form of every url. The other 308s to it, so a
+        // link with a stray slash keeps its method and its body and lands on
+        // the page that is indexed.
+        .trailing_slash(TrailingSlash::Redirect)
         .runtime()
         .discover()
         .assets(assets)

@@ -14,7 +14,9 @@ use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
 use topcoat::cookie::RouterBuilderCookieExt;
 use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::router::request::Request;
-use topcoat::router::{to_bytes, Body, Router, RouterBuilderDiscoverExt, StatusCode};
+use topcoat::router::{
+    to_bytes, Body, Router, RouterBuilderDiscoverExt, StatusCode, TrailingSlash,
+};
 use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
 use topcoat_shop::bundle;
@@ -38,6 +40,7 @@ async fn main() {
     let pool = db::connect(&scratch.to_string_lossy()).await.expect("database");
 
     let router = Router::builder()
+        .trailing_slash(TrailingSlash::Redirect)
         .runtime()
         .discover()
         .assets(assets)
