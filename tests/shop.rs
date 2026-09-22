@@ -261,6 +261,33 @@ async fn every_product_in_the_catalog_answers() {
     }
 }
 
+/// The page reads its own signal on the server, so a query string still
+/// renders the results without the browser running anything.
+#[tokio::test]
+async fn the_search_page_renders_its_results_from_the_query_string() {
+    let mut shop = Shop::open().await;
+
+    let found = shop.get("/recherche?q=mug").await;
+    found.assert_ok("/recherche?q=mug");
+    assert!(
+        found.contains("/produit/COQ-MUG"),
+        "the mug is missing from its own search"
+    );
+    assert!(found.contains("résultat"), "the count is missing");
+
+    // An empty field is a selection, not an empty page.
+    let bare = shop.get("/recherche").await;
+    bare.assert_ok("/recherche");
+    assert!(bare.contains("Une sélection pour commencer"));
+
+    let nothing = shop.get("/recherche?q=zzzzzz").await;
+    nothing.assert_ok("/recherche?q=zzzzzz");
+    assert!(
+        nothing.contains("Rien pour"),
+        "a search with no hit says nothing found"
+    );
+}
+
 #[tokio::test]
 async fn a_missing_page_is_a_404_wearing_the_shell() {
     let mut shop = Shop::open().await;

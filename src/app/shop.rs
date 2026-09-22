@@ -5,7 +5,7 @@
 use topcoat::context::Cx;
 use topcoat::router::error::{see_other, RouterErrorExt, SeeOther};
 use topcoat::router::{content::Form, page, path_param, query_params, route};
-use topcoat::runtime::{procedure, shard, signal, Signal, Event};
+use topcoat::runtime::{procedure, signal, Event, Signal};
 use topcoat::view::{component, view, View};
 use topcoat::Result;
 
@@ -154,62 +154,25 @@ struct SearchQuery {
     q: Option<String>,
 }
 
-/// Re-rendered by the server on every keystroke. An empty field is not an
-/// empty page: it shows a selection, so the visitor always has something to
-/// look at.
-#[shard]
-async fn results(cx: &Cx, term: String) -> Result<impl View> {
-    let searching = !term.trim().is_empty();
+#[page("/recherche")]
+async fn search(cx: &Cx) -> Result<impl View> {
+    let initial = query_params::<SearchQuery>(cx)?.q.clone().unwrap_or_default();
+    let term = signal(cx, || initial);
+
+    // A tracked read. Every keystroke sets `term` in the browser, which runs
+    // this page again on the server with the typed value, and the morph swaps
+    // the list without disturbing the field being typed in. An empty field is
+    // not an empty page: it shows a selection, so there is always something to
+    // look at.
+    let typed = term.get();
+    let searching = !typed.trim().is_empty();
     let products = if searching {
-        db::search(pool(cx), &term).await?
+        db::search(pool(cx), &typed).await?
     } else {
         db::new_arrivals(pool(cx), 6).await?
     };
     let how_many = products.len();
     let nothing = searching && products.is_empty();
-
-    Ok(view! {
-        if nothing {
-            <div class="py-16 text-center">
-                <p class="font-display text-3xl">
-                    "Rien pour « "
-                    (&term)
-                    " »"
-                </p>
-                <p class=("mt-3 ".to_string() + SOFT)>
-                    "Essayez « coton », « laiton », « papier », ou parcourez toute la collection."
-                </p>
-                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-8")>
-                    "Voir la boutique"
-                </a>
-            </div>
-        } else {
-            <p class=("text-sm ".to_string() + MUTED)>
-                if searching {
-                    (format!(
-                        "{how_many} résultat{}",
-                        if how_many > 1 { "s" } else { "" },
-                    ))
-                } else {
-                    "Une sélection pour commencer"
-                }
-            </p>
-            <div
-                class="animate-apparition mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3"
-            >
-                for p in products {
-                    product_tile(p: p)
-                }
-            </div>
-        }
-    })
-}
-
-#[page("/recherche")]
-async fn search(cx: &Cx) -> Result<impl View> {
-    let initial = query_params::<SearchQuery>(cx)?.q.clone().unwrap_or_default();
-
-    let term = signal(cx, || initial);
 
     Ok(view! {
         page_heading(
@@ -233,7 +196,41 @@ async fn search(cx: &Cx) -> Result<impl View> {
             >
         </form>
 
-        <div class="mt-10">results(term: $(term.get()))</div>
+        <div class="mt-10">
+            if nothing {
+                <div class="py-16 text-center">
+                    <p class="font-display text-3xl">
+                        "Rien pour « "
+                        (&typed)
+                        " »"
+                    </p>
+                    <p class=("mt-3 ".to_string() + SOFT)>
+                        "Essayez « coton », « laiton », « papier », ou parcourez toute la collection."
+                    </p>
+                    <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-8")>
+                        "Voir la boutique"
+                    </a>
+                </div>
+            } else {
+                <p class=("text-sm ".to_string() + MUTED)>
+                    if searching {
+                        (format!(
+                            "{how_many} résultat{}",
+                            if how_many > 1 { "s" } else { "" },
+                        ))
+                    } else {
+                        "Une sélection pour commencer"
+                    }
+                </p>
+                <div
+                    class="animate-apparition mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                    for p in products {
+                        product_tile(p: p)
+                    }
+                </div>
+            }
+        </div>
     })
 }
 
