@@ -30,6 +30,7 @@ edge = [
     "dep:console_error_panic_hook",
     "dep:wasm-bindgen-futures",
     "dep:futures-channel",
+    "dep:futures-util",
 ]
 
 [lib]
@@ -86,6 +87,8 @@ time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures-channel = { version = "0.3", optional = true }
+# The Worker adapter maps the router's body stream frame by frame.
+futures-util = { version = "0.3", default-features = false, optional = true }
 
 [build-dependencies]
 topcoat = { version = "0.8.1", default-features = false, features = ["tailwind"] }

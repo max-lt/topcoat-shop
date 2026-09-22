@@ -24,7 +24,7 @@ pub mod images;
 
 #[cfg(feature = "edge")]
 mod worker_adapter {
-    use http_body_util::BodyExt;
+    use futures_util::StreamExt;
     use topcoat::cookie::RouterBuilderCookieExt;
     use topcoat::runtime::RouterBuilderRuntimeExt;
     use topcoat::router::{BodyLimit, Body, Router, RouterBuilderDiscoverExt, TrailingSlash};
@@ -68,18 +68,20 @@ mod worker_adapter {
         let response = router.handle(request).await;
 
         let (head, body) = response.into_parts();
-        let bytes = body
-            .collect()
-            .await
-            .map_err(|e| Error::RustError(e.to_string()))?
-            .to_bytes();
         let headers = Headers::new();
         for (name, value) in head.headers.iter() {
             if let Ok(v) = value.to_str() {
                 headers.append(name.as_str(), v)?;
             }
         }
-        Ok(Response::from_bytes(bytes.to_vec())?
+
+        // Hand the router's body to the Worker frame by frame. Collecting it
+        // first would render a streamed page correctly and still make the
+        // reader wait for its slowest region before the first byte.
+        let frames = body
+            .into_data_stream()
+            .map(|frame| frame.map_err(|e| Error::RustError(e.to_string())));
+        Ok(Response::from_stream(frames)?
             .with_status(head.status.as_u16())
             .with_headers(headers))
     }

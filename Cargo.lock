@@ -2643,6 +2643,7 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "futures-channel",
+ "futures-util",
  "http",
  "http-body-util",
  "image",
