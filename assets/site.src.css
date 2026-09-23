@@ -23,15 +23,15 @@
    Same trick as data-vt: a typed attr() instead of a dynamic style=
    attribute, which would trip the topcoat-view hydration bug. Engines
    without typed attr() drop the rule and keep the utility background. */
-[data-fond] {
-  background-color: attr(data-fond type(<color>), var(--color-oat-100));
+[data-bg] {
+  background-color: attr(data-bg type(<color>), var(--color-oat-100));
 }
 
 /* The free-shipping gauge: its fill is server arithmetic, carried the
    same way. Engines without typed attr() keep the text line and lose
    only the bar. */
-[data-jauge] {
-  width: attr(data-jauge type(<percentage>), 0%);
+[data-gauge] {
+  width: attr(data-gauge type(<percentage>), 0%);
 }
 
 @media (prefers-reduced-motion: reduce) {
