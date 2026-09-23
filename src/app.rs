@@ -43,6 +43,48 @@ pub const EYEBROW: &str = "text-xs font-medium uppercase tracking-[0.2em] text-g
 pub const SOFT: &str = "text-oat-700";
 pub const MUTED: &str = "text-oat-600";
 
+// --- icons
+
+/// The house mark: the shell a hermit crab carries, as one spiral.
+pub const SHELL: &str = "M12 10.9a2.25 2.25 0 0 1 4.5 0a4.5 4.5 0 0 1-9 0\
+    a6.75 6.75 0 0 1 13.5 0a9 9 0 0 1-18 0";
+
+// The others are Lucide's (ISC licence), each merged into one path.
+pub const PARCEL: &str = "M7.5 4.27l9 5.15M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 \
+    4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM3.3 7l8.7 \
+    5 8.7-5M12 22V12";
+pub const RETURN: &str = "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 \
+    5.5H11";
+pub const LEAF: &str = "M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 \
+    5.5-4.78 10-10 10ZM2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12";
+pub const WAVES: &str = "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 \
+    5-2 1.3 0 1.9.5 2.5 1M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 \
+    2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 \
+    2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1";
+
+/// A line icon on a 24-unit grid, stroked in the current text colour.
+/// Emoji would draw in each system's own style, next to a typeface that
+/// is the same everywhere.
+#[component]
+pub async fn icon(d: &str, class: &str) -> Result<impl View> {
+    Ok(view! {
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            class=(class)
+        >
+            <path d=(d)></path>
+        </svg>
+    })
+}
+
+// --- building blocks
+
 #[component]
 pub async fn page_heading(eyebrow: &str, title: &str, lede: &str) -> Result<impl View> {
     Ok(view! {
@@ -315,7 +357,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                 >
                 <link
                     rel="icon"
-                    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🦀%3C/text%3E%3C/svg%3E"
+                    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 10.9a2.25 2.25 0 0 1 4.5 0a4.5 4.5 0 0 1-9 0a6.75 6.75 0 0 1 13.5 0a9 9 0 0 1-18 0' fill='none' stroke='%23356046' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
                 >
                 <meta name="theme-color" content="#fbf9f5">
                 <meta property="og:site_name" content="Bernard">
@@ -409,7 +451,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                         </details>
 
                         <a href="/" class="flex shrink-0 items-center gap-2">
-                            <span class="text-xl">"🦀"</span>
+                            icon(d: SHELL, class: "h-6 w-6 text-gin-700")
                             <span class="font-display text-xl">"Bernard"</span>
                         </a>
 
@@ -654,10 +696,10 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
 // --- home
 
 const PROMISES: [(&str, &str, &str); 4] = [
-    ("📦", "Livraison offerte", "Dès 50 € d'achat, partout en France."),
-    ("↩️", "Trente jours", "Retours acceptés, échange de taille compris."),
-    ("🧵", "Matières choisies", "Coton biologique, papiers épais, rien de creux."),
-    ("🦀", "Fait à Brest", "Dessiné au bord de l'eau, produit au plus près."),
+    (PARCEL, "Livraison offerte", "Dès 50 € d'achat, partout en France."),
+    (RETURN, "Trente jours", "Retours acceptés, échange de taille compris."),
+    (LEAF, "Matières choisies", "Coton biologique, papiers épais, rien de creux."),
+    (WAVES, "Fait à Brest", "Dessiné au bord de l'eau, produit au plus près."),
 ];
 
 #[query_params(error = bad_request)]
@@ -786,9 +828,9 @@ async fn home(cx: &Cx) -> Result<impl View> {
             class="mt-24 rounded-3xl bg-oat-100 px-6 py-12 ring-1 ring-oat-200 sm:px-10"
         >
             <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                for (icon, title, text) in PROMISES {
+                for (path, title, text) in PROMISES {
                     <div>
-                        <span class="text-2xl">(icon)</span>
+                        icon(d: path, class: "h-7 w-7 text-gin-700")
                         <p class="mt-3 font-medium">(title)</p>
                         <p class=("mt-1 text-sm leading-relaxed ".to_string() + MUTED)>
                             (text)

@@ -11,7 +11,7 @@ use topcoat::view::{component, view, View, ViewExt};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, forget_cart, pool};
-use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
+use crate::app::{icon, page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SHELL, SOFT};
 use crate::db::{self, format_price};
 
 #[procedure]
@@ -275,7 +275,7 @@ async fn cart(cx: &Cx) -> Result<impl View> {
 
         if empty {
             <div class="mt-16 text-center">
-                <p class="text-6xl">"🦀"</p>
+                icon(d: SHELL, class: "mx-auto h-16 w-16 text-gin-700")
                 <p class=("mt-6 text-lg ".to_string() + SOFT)>
                     "Votre panier est vide."
                 </p>
