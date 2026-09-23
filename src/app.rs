@@ -724,8 +724,27 @@ async fn subscribe(cx: &Cx, Form(f): Form<Subscription>) -> Result<SeeOther> {
 
 #[page("/")]
 async fn home(cx: &Cx) -> Result<impl View> {
-    let featured = db::new_arrivals(pool(cx), 4).await?;
-    let categories = db::categories(pool(cx)).await?;
+    // Eight arrivals, split in two: the hero shows the first four, the shelf
+    // below the next four, so no photo appears twice on the page.
+    let mut hero = db::new_arrivals(pool(cx), 8).await?;
+    let featured = hero.split_off(hero.len().min(4));
+
+    // Each category wears the photo of one of its products, preferably one
+    // the page does not show already. A category with nothing on sale is
+    // left out: its card would open an empty shelf.
+    let catalog = db::catalog(pool(cx), "", 0).await?;
+    let shown: Vec<&str> = hero.iter().chain(&featured).map(|p| p.sku.as_str()).collect();
+    let shelves: Vec<(String, String)> = db::categories(pool(cx))
+        .await?
+        .into_iter()
+        .filter_map(|category| {
+            let mut products = catalog.iter().filter(|p| p.category == category);
+            let first = products.clone().next()?;
+            let cover = products.find(|p| !shown.contains(&p.sku.as_str())).unwrap_or(first);
+            let sku = cover.sku.clone();
+            Some((category, sku))
+        })
+        .collect();
     let letter = query_params::<NewsletterState>(cx)?.lettre.clone().unwrap_or_default();
     let thanks = letter == "merci";
     let invalid = letter == "invalide";
@@ -751,7 +770,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
             </div>
 
             <div class="grid grid-cols-2 gap-4">
-                for (i, p) in featured.iter().enumerate() {
+                for (i, p) in hero.iter().enumerate() {
                     // The right column drops for a hand-stacked, off-grid look.
                     // The drop rides the wrapper and the hover lift the link, or
                     // the two would write the same translate and the tile would
@@ -789,15 +808,31 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     "Tout voir"
                 </a>
             </div>
-            <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                for c in categories {
+            // One row whatever the count: it scrolls sideways on a phone, and
+            // shares the width in equal columns from lg up.
+            <div
+                class="-mx-6 mt-8 flex snap-x snap-mandatory scroll-px-6 gap-4 overflow-x-auto px-6 pb-2 [scrollbar-width:none] lg:mx-0 lg:grid lg:auto-cols-fr lg:grid-flow-col lg:overflow-visible lg:px-0 lg:pb-0"
+            >
+                for (c, sku) in shelves {
                     <a
                         href=("/boutique?categorie=".to_string() + &c)
-                        class="group flex items-center justify-between rounded-2xl bg-white px-5 py-6 ring-1 ring-oat-200 transition hover:ring-gin-400"
+                        data-bg=(crate::images::background(&sku))
+                        class="group relative block aspect-[4/5] w-40 shrink-0 snap-start overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:shadow-xl hover:shadow-oat-900/10 sm:w-48 lg:w-auto"
                     >
-                        <span class="text-lg">(&c)</span>
-                        <span class="text-gin-700 transition group-hover:translate-x-1">
-                            "→"
+                        <img
+                            src=(crate::images::url(&sku, 400))
+                            alt=""
+                            loading="lazy"
+                            class="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        >
+                        <span
+                            class="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-oat-900/75 to-transparent"
+                        ></span>
+                        <span
+                            class="absolute inset-x-0 bottom-0 flex items-baseline justify-between gap-2 p-4 text-oat-50"
+                        >
+                            <span class="font-display text-2xl">(&c)</span>
+                            <span class="transition group-hover:translate-x-1">"→"</span>
                         </span>
                     </a>
                 }
