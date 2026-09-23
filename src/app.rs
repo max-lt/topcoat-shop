@@ -86,13 +86,6 @@ pub async fn product_tile(p: Product) -> Result<impl View> {
                     loading="lazy"
                     class="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                 >
-                if is_new {
-                    <span
-                        class="absolute left-3 top-3 rounded-full bg-gin-700 px-2.5 py-1 text-xs font-medium uppercase tracking-widest text-oat-50"
-                    >
-                        "Nouveau"
-                    </span>
-                }
                 if sold_out {
                     <span
                         class="absolute inset-x-0 bottom-0 bg-oat-900/85 py-2 text-center text-xs font-medium text-oat-50"
@@ -107,7 +100,19 @@ pub async fn product_tile(p: Product) -> Result<impl View> {
                     (format_price(p.price_cents))
                 </span>
             </div>
-            <p class=("mt-1 text-sm ".to_string() + MUTED)>(&p.category)</p>
+            // "Nouveau" sits in the caption, not on the photo: the catalogue
+            // sorts new products first, so a pill on each of them would cover
+            // the whole first screen and say nothing. Only "Épuisé" earns the
+            // photo, since it changes what a click can buy.
+            <p class=("mt-1 text-sm ".to_string() + MUTED)>
+                (&p.category)
+                // No-break spaces: the minifier drops a plain one that
+                // touches an element.
+                if is_new {
+                    "\u{a0}·\u{a0}"
+                    <span class="text-gin-700">"Nouveau"</span>
+                }
+            </p>
         </a>
     })
 }
