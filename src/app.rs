@@ -390,7 +390,8 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                 >
                     "Livraison offerte dès "
                     (format_price(db::FREE_SHIPPING_CENTS))
-                    " — retours acceptés 30 jours"
+                    // One line on a phone: the returns half waits for sm.
+                    <span class="hidden sm:inline">"\u{a0}— retours acceptés 30 jours"</span>
                 </p>
 
                 <header
@@ -508,9 +509,11 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                         </form>
 
                         <div class="ml-auto flex items-center gap-4 lg:ml-0">
+                            // The burger carries it below sm, where it would
+                            // wrap onto two lines beside the cart.
                             <a
                                 href="/compte"
-                                class="text-sm transition hover:text-gin-700"
+                                class="hidden whitespace-nowrap text-sm transition hover:text-gin-700 sm:inline"
                             >
                                 (if signed_in { "Mon compte" } else { "Connexion" })
                             </a>

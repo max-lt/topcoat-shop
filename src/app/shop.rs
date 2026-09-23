@@ -584,7 +584,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     </div>
                     <div>
                         <dt class=(MUTED)>"Référence"</dt>
-                        <dd class="mt-1 tabular-nums">(&p.sku)</dd>
+                        <dd class="mt-1 whitespace-nowrap tabular-nums">(&p.sku)</dd>
                     </div>
                 </dl>
 
