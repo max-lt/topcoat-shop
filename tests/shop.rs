@@ -9,12 +9,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
-use topcoat::cookie::RouterBuilderCookieExt;
 use topcoat::router::request::Request;
 use topcoat::router::response::Response;
-use topcoat::router::{Body, Router, RouterBuilderDiscoverExt, StatusCode, to_bytes};
-use topcoat::runtime::RouterBuilderRuntimeExt;
-use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
+use topcoat::router::{Body, Router, StatusCode, to_bytes};
 
 use topcoat_shop::db;
 
@@ -41,12 +38,8 @@ impl Shop {
         let pool = db::connect(&database.to_string_lossy())
             .await
             .expect("database");
-        let router = Router::builder()
-            .runtime()
-            .discover()
+        let router = topcoat_shop::router()
             .assets(asset_bundle())
-            .cookies()
-            .sessions(SessionConfig::default())
             .app_context(pool)
             .build();
 
@@ -68,13 +61,34 @@ impl Shop {
             .map(|(k, v)| format!("{}={}", urlencode(k), urlencode(v)))
             .collect::<Vec<_>>()
             .join("&");
+        let body = ("application/x-www-form-urlencoded".to_string(), body.into_bytes());
         self.send("POST", url, Some(body)).await
     }
 
-    async fn send(&mut self, method: &str, url: &str, form: Option<String>) -> Page {
+    /// A multipart submission, as a browser sends a form with a file input.
+    async fn post_multipart(&mut self, url: &str, fields: &[(&str, &[u8])]) -> Page {
+        const BOUNDARY: &str = "shop-test-boundary";
+        let mut body = Vec::new();
+        for (name, value) in fields {
+            body.extend_from_slice(
+                format!(
+                    "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n"
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(value);
+            body.extend_from_slice(b"\r\n");
+        }
+        body.extend_from_slice(format!("--{BOUNDARY}--\r\n").as_bytes());
+        let content_type = format!("multipart/form-data; boundary={BOUNDARY}");
+        self.send("POST", url, Some((content_type, body))).await
+    }
+
+    /// `body` is the content type and the bytes.
+    async fn send(&mut self, method: &str, url: &str, body: Option<(String, Vec<u8>)>) -> Page {
         let mut request = Request::builder().method(method).uri(url);
-        if form.is_some() {
-            request = request.header("content-type", "application/x-www-form-urlencoded");
+        if let Some((content_type, _)) = &body {
+            request = request.header("content-type", content_type);
         }
         if !self.jar.is_empty() {
             let header = self
@@ -85,7 +99,7 @@ impl Shop {
                 .join("; ");
             request = request.header("cookie", header);
         }
-        let body = form.map_or_else(Body::empty, Body::from);
+        let body = body.map_or_else(Body::empty, |(_, bytes)| Body::from(bytes));
         let response = self
             .router
             .handle(request.body(body).expect("request"))
@@ -704,6 +718,36 @@ async fn an_admin_reaches_the_back_office_and_can_change_a_price() {
         .await
         .expect("price");
     assert_eq!(cents, 4200, "the price did not move");
+}
+
+/// The photo route reads up to PHOTO_LIMIT, where every other route stops
+/// at the router's 2 MiB default. The filler is no `file` field, so the
+/// route reads it through and writes nothing to the photo directory.
+#[tokio::test]
+async fn a_photo_upload_is_bounded_by_its_own_limit() {
+    let mut shop = Shop::open().await;
+    shop.sign_up("patron@bernard.sh").await;
+    let pool = db::connect(&shop.pool()).await.expect("database");
+    sqlx::query("update users set admin = 1 where email = 'patron@bernard.sh'")
+        .execute(&pool)
+        .await
+        .expect("raise the flag");
+
+    let phone_shot = vec![b'x'; 3 * 1024 * 1024];
+    let page = shop
+        .post_multipart(
+            "/admin/photo",
+            &[("sku", b"COQ-MUG"), ("filler", &phone_shot)],
+        )
+        .await;
+    assert_eq!(page.status, StatusCode::SEE_OTHER, "3 MiB answered {}", page.status);
+    assert_eq!(page.location.as_deref(), Some("/admin/produit/COQ-MUG"));
+
+    let too_big = vec![b'x'; topcoat_shop::app::admin::PHOTO_LIMIT + 1];
+    let page = shop
+        .post_multipart("/admin/photo", &[("sku", b"COQ-MUG"), ("filler", &too_big)])
+        .await;
+    assert_eq!(page.status, StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[tokio::test]

@@ -11,13 +11,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
-use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::runtime::RouterBuilderRuntimeExt;
 use topcoat::router::request::Request;
-use topcoat::router::{
-    to_bytes, Body, Router, RouterBuilderDiscoverExt, StatusCode, TrailingSlash,
-};
-use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
+use topcoat::router::{to_bytes, Body, Router, StatusCode};
 
 use topcoat_shop::bundle;
 use topcoat_shop::db;
@@ -39,15 +34,7 @@ async fn main() {
     let _ = std::fs::remove_file(&scratch);
     let pool = db::connect(&scratch.to_string_lossy()).await.expect("database");
 
-    let router = Router::builder()
-        .trailing_slash(TrailingSlash::Redirect)
-        .runtime()
-        .discover()
-        .assets(assets)
-        .cookies()
-        .sessions(SessionConfig::default())
-        .app_context(pool)
-        .build();
+    let router = topcoat_shop::router().assets(assets).app_context(pool).build();
 
     let home = String::from_utf8(fetch(&router, "/").await).expect("the home page is utf-8");
 

@@ -3,12 +3,7 @@
 use tokio::net::TcpListener;
 
 use topcoat::asset::{AssetBundle, RouterBuilderAssetExt};
-use topcoat::cookie::RouterBuilderCookieExt;
-use topcoat::router::{BodyLimit, Router, RouterBuilderDiscoverExt, TrailingSlash};
-use topcoat::runtime::RouterBuilderRuntimeExt;
-use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
 
-use topcoat_shop::app::admin::PHOTO_LIMIT;
 use topcoat_shop::{db, images};
 
 #[tokio::main]
@@ -28,19 +23,7 @@ async fn main() {
     images::prewarm();
     march_parcels(pool.clone());
 
-    let router = Router::builder()
-        // The sitemap names one form of every url. The other 308s to it, so a
-        // link with a stray slash keeps its method and its body and lands on
-        // the page that is indexed.
-        .trailing_slash(TrailingSlash::Redirect)
-        .runtime()
-        .discover()
-        .assets(assets)
-        .cookies()
-        .sessions(SessionConfig::default())
-        .layer(BodyLimit::max(PHOTO_LIMIT).at("/admin/photo"))
-        .app_context(pool)
-        .build();
+    let router = topcoat_shop::router().assets(assets).app_context(pool).build();
 
     // `topcoat::start` reads HOST and PORT and binds on its own, and keeps the
     // address to itself. Binding here instead prints the port the listener

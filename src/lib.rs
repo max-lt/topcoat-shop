@@ -20,15 +20,32 @@ pub mod images;
 #[path = "images/edge.rs"]
 pub mod images;
 
+use topcoat::cookie::RouterBuilderCookieExt;
+use topcoat::router::{BodyLimit, Router, RouterBuilder, RouterBuilderDiscoverExt, TrailingSlash};
+use topcoat::runtime::RouterBuilderRuntimeExt;
+use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
+
+/// The router every host serves. The host adds what only it has: the
+/// asset bundle and the SQLite pool natively, nothing at the edge.
+pub fn router() -> RouterBuilder {
+    Router::builder()
+        // The sitemap names one form of every url. The other 308s to it, so a
+        // link with a stray slash keeps its method and its body and lands on
+        // the page that is indexed.
+        .trailing_slash(TrailingSlash::Redirect)
+        .runtime()
+        .discover()
+        .cookies()
+        .sessions(SessionConfig::default())
+        .layer(BodyLimit::max(app::admin::PHOTO_LIMIT).at("/admin/photo"))
+}
+
 // --- the Worker entry point
 
 #[cfg(feature = "edge")]
 mod worker_adapter {
     use futures_util::StreamExt;
-    use topcoat::cookie::RouterBuilderCookieExt;
-    use topcoat::runtime::RouterBuilderRuntimeExt;
-    use topcoat::router::{BodyLimit, Body, Router, RouterBuilderDiscoverExt, TrailingSlash};
-    use topcoat::session::{RouterBuilderSessionExt, SessionConfig};
+    use topcoat::router::Body;
     use worker::{
         console_log, event, Context, Env, Error, Headers, Request, Response, Result,
         ScheduleContext, ScheduledEvent,
@@ -56,16 +73,7 @@ mod worker_adapter {
         let request =
             request.body(Body::from(body)).map_err(|e| Error::RustError(e.to_string()))?;
 
-        let router = Router::builder()
-            // The sitemap names one form of every url; the other 308s to it.
-            .trailing_slash(TrailingSlash::Redirect)
-            .runtime()
-            .discover()
-            .cookies()
-            .sessions(SessionConfig::default())
-            .layer(BodyLimit::max(crate::app::admin::PHOTO_LIMIT).at("/admin/photo"))
-            .build();
-        let response = router.handle(request).await;
+        let response = crate::router().build().handle(request).await;
 
         let (head, body) = response.into_parts();
         let headers = Headers::new();
