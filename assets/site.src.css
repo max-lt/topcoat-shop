@@ -69,9 +69,9 @@
   --color-gin-900: #274031;
 
   /* Terracotta — reserved for sale tags and destructive actions. */
-  --color-brique-100: #f6e7e0;
-  --color-brique-500: #b5613f;
-  --color-brique-700: #8a4529;
+  --color-brick-100: #f6e7e0;
+  --color-brick-500: #b5613f;
+  --color-brick-700: #8a4529;
 
   --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
@@ -79,8 +79,8 @@
   /* A helper bubble that says its piece then leaves: fade in, hold two
      seconds, fade out and stay gone (forwards). display:none resets the
      animation, so every reveal replays it from the start. */
-  --animate-bulle: bulle 2.6s ease forwards;
-  @keyframes bulle {
+  --animate-bubble: bubble 2.6s ease forwards;
+  @keyframes bubble {
     0% {
       opacity: 0;
       transform: translateY(4px);
@@ -98,8 +98,8 @@
   }
 
   /* Content swapped in by a shard fades up instead of popping. */
-  --animate-apparition: apparition 0.3s ease both;
-  @keyframes apparition {
+  --animate-appear: appear 0.3s ease both;
+  @keyframes appear {
     from {
       opacity: 0;
       transform: translateY(6px);

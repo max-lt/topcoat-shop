@@ -27,7 +27,7 @@ pub async fn status_badge(status: String) -> Result<impl View> {
         "paid" => ("Payée", "bg-oat-200 text-oat-800"),
         "packing" => ("En préparation", "bg-gin-100 text-gin-800"),
         "shipped" => ("Expédiée", "bg-gin-200 text-gin-900"),
-        "cancelled" => ("Annulée", "bg-brique-100 text-brique-700"),
+        "cancelled" => ("Annulée", "bg-brick-100 text-brick-700"),
         _ => ("Livrée", "bg-gin-700 text-oat-50"),
     };
     Ok(view! {
@@ -110,10 +110,10 @@ async fn tracking(cx: &Cx, reference: String, version: f64) -> Result<impl View>
         </ol>
 
         for s in steps.iter().filter(|s| s.step == "cancelled") {
-            <div class="mt-8 rounded-2xl bg-brique-100 px-5 py-4">
-                <p class="text-sm font-medium text-brique-700">"Commande annulée"</p>
-                <p class="mt-1 text-sm text-brique-700">(&s.note)</p>
-                <time class="mt-1 block text-xs text-brique-500">
+            <div class="mt-8 rounded-2xl bg-brick-100 px-5 py-4">
+                <p class="text-sm font-medium text-brick-700">"Commande annulée"</p>
+                <p class="mt-1 text-sm text-brick-700">(&s.note)</p>
+                <time class="mt-1 block text-xs text-brick-500">
                     (s.at.get(..16).unwrap_or_default().replace('T', " à "))
                 </time>
             </div>
@@ -200,7 +200,7 @@ async fn order_page(cx: &Cx) -> Result<impl View> {
                         :hidden=$(step.get() >= 2.0)
                     >
                         <button
-                            class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+                            class=("text-sm underline underline-offset-4 transition hover:text-brick-700 ".to_string(
 
                                 )
                                 + MUTED)

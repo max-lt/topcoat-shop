@@ -175,7 +175,7 @@ async fn products(cx: &Cx) -> Result<impl View> {
                             </td>
                             <td
                                 class=(if p.stock == 0 {
-                                    "py-3 pr-6 tabular-nums text-brique-700"
+                                    "py-3 pr-6 tabular-nums text-brick-700"
                                 } else {
                                     "py-3 pr-6 tabular-nums"
                                 })
@@ -410,7 +410,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                                     <input type="hidden" name="sku" value=(&p.sku)>
                                     <input type="hidden" name="size" value=(&v.size)>
                                     <button
-                                        class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+                                        class=("text-sm underline underline-offset-4 transition hover:text-brick-700 ".to_string(
 
                                             )
                                             + MUTED)

@@ -170,7 +170,7 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
                         // nothing, this bubble says why instead of letting
                         // the counter freeze in silence.
                         <span
-                            class="animate-bulle pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
+                            class="animate-bubble pointer-events-none absolute -top-9 left-0 whitespace-nowrap rounded-full bg-oat-900 px-3 py-1.5 text-xs text-oat-50 shadow-sm"
                             :hidden=$(blocked.get() == 0.0)
                         >
                             "Il n'y en a que "
@@ -231,7 +231,7 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
                         </div>
                     </div>
                     <button
-                        class=("text-sm underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+                        class=("text-sm underline underline-offset-4 transition hover:text-brick-700 ".to_string(
 
                             )
                             + MUTED)
@@ -266,7 +266,7 @@ async fn cart(cx: &Cx) -> Result<impl View> {
 
         if clamped {
             <p
-                class="animate-apparition mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+                class="animate-appear mt-8 rounded-2xl bg-brick-100 px-5 py-4 text-sm text-brick-700"
             >
                 "Quelqu'un a été plus rapide sur les dernières pièces : votre panier \
                  vient d'être ramené aux quantités réellement disponibles."
@@ -386,7 +386,7 @@ async fn checkout_form(
         )
 
         if !problem.is_empty() {
-            <p class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700">
+            <p class="mt-8 rounded-2xl bg-brick-100 px-5 py-4 text-sm text-brick-700">
                 (&problem)
             </p>
         }

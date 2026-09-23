@@ -256,7 +256,7 @@ async fn contact(cx: &Cx) -> Result<impl View> {
                                 @input=$(|e: Event| email.set(e.target.value))
                             >
                             <p
-                                class="mt-2 text-xs text-brique-700"
+                                class="mt-2 text-xs text-brick-700"
                                 :hidden=$(if email.get().trim().is_empty() {
                                     true
                                 } else {

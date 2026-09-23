@@ -223,7 +223,7 @@ async fn search(cx: &Cx) -> Result<impl View> {
                     }
                 </p>
                 <div
-                    class="animate-apparition mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3"
+                    class="animate-appear mt-6 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3"
                 >
                     for p in products {
                         product_tile(p: p)
@@ -378,7 +378,7 @@ async fn reviews_section(
 
             if review_thanks {
                 <p
-                    class="animate-apparition mt-8 inline-flex rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50"
+                    class="animate-appear mt-8 inline-flex rounded-full bg-gin-700 px-4 py-2 text-sm text-oat-50"
                 >
                     "Merci pour votre avis !"
                 </p>
@@ -590,13 +590,13 @@ async fn product(cx: &Cx) -> Result<impl View> {
 
                 if sold_out {
                     <p
-                        class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+                        class="mt-8 rounded-2xl bg-brick-100 px-5 py-4 text-sm text-brick-700"
                     >
                         "Épuisé pour le moment. La prochaine série arrive avec la marée."
                     </p>
                     if alert_thanks {
                         <p
-                            class="animate-apparition mt-4 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
+                            class="animate-appear mt-4 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
                             id="dispo"
                         >
                             "C'est noté — un mot dès que la marée le ramène."
@@ -652,7 +652,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                             if has_missing {
                                 if alert_thanks {
                                     <p
-                                        class="animate-apparition mt-3 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
+                                        class="animate-appear mt-3 rounded-xl bg-gin-50 px-4 py-3 text-sm text-gin-800"
                                         id="dispo"
                                     >
                                         "C'est noté — un mot dès que la taille revient."
@@ -757,14 +757,14 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     </div>
 
                     <p
-                        class="mt-4 text-sm text-brique-700"
+                        class="mt-4 text-sm text-brick-700"
                         :hidden=$(held_qty.get() < size_stock.get())
                     >
                         "Vous avez tout le stock disponible dans votre panier."
                     </p>
 
                     if low {
-                        <p class="mt-4 text-sm text-brique-700">
+                        <p class="mt-4 text-sm text-brick-700">
                             (format!("Plus que {} exemplaires", p.stock))
                         </p>
                     }

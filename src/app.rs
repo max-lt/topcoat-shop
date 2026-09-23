@@ -211,7 +211,7 @@ async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
     Ok(view! {
         if !term.is_empty() {
             <div
-                class="animate-apparition rounded-2xl bg-white p-2 shadow-lg ring-1 ring-oat-200"
+                class="animate-appear rounded-2xl bg-white p-2 shadow-lg ring-1 ring-oat-200"
             >
                 if nothing {
                     <p class=("px-3 py-2 text-sm ".to_string() + MUTED)>
@@ -820,7 +820,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                 </p>
                 if thanks {
                     <p
-                        class="animate-apparition mx-auto mt-8 inline-flex items-center gap-2 rounded-full bg-oat-50 px-5 py-2.5 text-sm font-medium text-gin-800"
+                        class="animate-appear mx-auto mt-8 inline-flex items-center gap-2 rounded-full bg-oat-50 px-5 py-2.5 text-sm font-medium text-gin-800"
                     >
                         "✓ Bienvenue à bord — première lettre à la prochaine marée."
                     </p>
@@ -844,7 +844,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                         </button>
                     </form>
                     if invalid {
-                        <p class="mt-4 text-sm text-brique-100">
+                        <p class="mt-4 text-sm text-brick-100">
                             "Cette adresse ne ressemble pas à une adresse."
                         </p>
                     }

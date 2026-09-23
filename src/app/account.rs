@@ -52,7 +52,7 @@ async fn sign_in_page(cx: &Cx) -> Result<impl View> {
 
             if !message.is_empty() {
                 <p
-                    class="mt-8 rounded-2xl bg-brique-100 px-5 py-4 text-sm text-brique-700"
+                    class="mt-8 rounded-2xl bg-brick-100 px-5 py-4 text-sm text-brick-700"
                 >
                     (message)
                 </p>
@@ -268,7 +268,7 @@ async fn account(cx: &Cx) -> Result<impl View> {
                                 <form method="post" action="/adresses/supprimer">
                                     <input type="hidden" name="id" value=(a.id)>
                                     <button
-                                        class=("underline underline-offset-4 transition hover:text-brique-700 ".to_string(
+                                        class=("underline underline-offset-4 transition hover:text-brick-700 ".to_string(
 
                                             )
                                             + MUTED)
