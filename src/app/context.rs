@@ -17,11 +17,11 @@ pub fn pool(cx: &Cx) -> &sqlx::SqlitePool {
     topcoat::context::app_context::<sqlx::SqlitePool>(cx)
 }
 
-/// D1 travels through a thread_local, not the app context: the views
-/// still pass "the pool" around and stay host-agnostic.
+/// The Worker hands each request its D1 handle in the request context.
+/// The views pass "the pool" around and stay host-agnostic.
 #[cfg(feature = "edge")]
-pub fn pool(_cx: &Cx) -> db::Db {
-    db::Db
+pub fn pool(cx: &Cx) -> &db::Db {
+    topcoat::context::request_context::<db::Db>(cx)
 }
 
 /// The signed-in user, or `None`. An unknown or expired token hash counts as

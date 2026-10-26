@@ -68,8 +68,9 @@ mod worker_adapter {
     #[event(fetch)]
     async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<http::Response<Body>> {
         console_error_panic_hook::set_once();
-        crate::db::install(env.d1("DB")?);
-        crate::images::install(&env);
+        // The bindings ride with the request: pool(cx) and the photo
+        // routes read them from its context.
+        let bindings = (crate::db::Db::new(env.d1("DB")?), crate::images::Bindings::new(&env));
 
         // The Worker hands over the absolute url. The router is given what
         // a server would give it: the path and the query.
@@ -81,7 +82,7 @@ mod worker_adapter {
         let signal = head.extensions.get::<AbortSignal>().cloned();
 
         let mut response =
-            router().handle(http::Request::from_parts(head, Body::new(body))).await;
+            router().handle_with(http::Request::from_parts(head, Body::new(body)), bindings).await;
 
         // The Workers runtime refuses a body on these statuses, and a HEAD
         // answer must not carry the page it describes.
@@ -219,8 +220,7 @@ mod worker_adapter {
             console_log!("cron {}: no DB binding", event.cron());
             return;
         };
-        crate::db::install(d1);
-        match crate::db::advance_pending(crate::db::Db).await {
+        match crate::db::advance_pending(&crate::db::Db::new(d1)).await {
             Ok(moved) => console_log!("cron {}: {moved} orders advanced", event.cron()),
             Err(e) => console_log!("cron {}: {e}", event.cron()),
         }

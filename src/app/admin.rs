@@ -822,7 +822,7 @@ async fn upload_photo(cx: &Cx, mut body: Multipart) -> Result<SeeOther> {
     db::product(pool(cx), &sku).await?.ok_or_not_found()?;
 
     if !file.is_empty() {
-        crate::images::store(&sku, file).await?;
+        crate::images::store(cx, &sku, file).await?;
     }
     Ok(see_other(format!("/admin/produit/{sku}")))
 }

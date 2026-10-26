@@ -4,15 +4,13 @@
 //! `url`, `background` and `store` keep the signatures of the native
 //! kitchen, so the views and the back office compile against either.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use topcoat::context::Cx;
+use topcoat::context::{request_context, Cx};
 use topcoat::router::error::RouterErrorExt;
 use topcoat::router::response::{IntoResponse, Response};
 use topcoat::router::{path_param, route, Body};
 use topcoat::{Error, Result};
 use worker::js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
+use worker::send::SendWrapper;
 use worker::wasm_bindgen::{JsCast, JsValue};
 
 /// Same widths as the native kitchen; requests snap to the nearest so the
@@ -27,18 +25,29 @@ const WEBP_QUALITY: f64 = 80.0;
 /// stores it.
 const UPLOAD_QUALITY: f64 = 85.0;
 
-thread_local! {
-    static KITCHEN: RefCell<Option<Rc<JsValue>>> = const { RefCell::new(None) };
-    static PHOTOS: RefCell<Option<Rc<worker::Bucket>>> = const { RefCell::new(None) };
+/// The bindings an image request needs, carried in its request context.
+/// Without IMAGES the originals still serve, just heavier; without the
+/// bucket there is nothing to serve and the photo route answers 404.
+#[derive(Clone)]
+pub struct Bindings(SendWrapper<Kitchen>);
+
+#[derive(Clone)]
+struct Kitchen {
+    images: Option<JsValue>,
+    photos: Option<worker::Bucket>,
 }
 
-/// Keeps the bindings at hand for the request. Without IMAGES the
-/// originals still serve, just heavier; without the bucket there is
-/// nothing to serve and the photo route answers 404.
-pub fn install(env: &worker::Env) {
-    let raw = Reflect::get(env.as_ref(), &JsValue::from_str("IMAGES")).ok();
-    KITCHEN.with(|k| *k.borrow_mut() = raw.filter(|v| v.is_object()).map(Rc::new));
-    PHOTOS.with(|b| *b.borrow_mut() = env.bucket("PHOTOS").ok().map(Rc::new));
+impl Bindings {
+    pub fn new(env: &worker::Env) -> Self {
+        let images = Reflect::get(env.as_ref(), &JsValue::from_str("IMAGES"))
+            .ok()
+            .filter(JsValue::is_object);
+        Self(SendWrapper::new(Kitchen { images, photos: env.bucket("PHOTOS").ok() }))
+    }
+}
+
+fn bindings(cx: &Cx) -> Kitchen {
+    request_context::<Bindings>(cx).0.0.clone()
 }
 
 fn key_for(sku: &str) -> String {
@@ -131,8 +140,8 @@ async fn cook(
 }
 
 /// The original as stored. Only callable from inside a spawn_local task.
-async fn original(sku: &str) -> Result<Option<Vec<u8>>> {
-    let Some(bucket) = PHOTOS.with(|b| b.borrow().clone()) else {
+async fn original(kitchen: &Kitchen, sku: &str) -> Result<Option<Vec<u8>>> {
+    let Some(bucket) = &kitchen.photos else {
         return Ok(None);
     };
     let object =
@@ -151,17 +160,17 @@ async fn original(sku: &str) -> Result<Option<Vec<u8>>> {
 /// A failed transform still has the original in hand: a photo does not go
 /// dark for want of a resize.
 fn served(
+    kitchen: Kitchen,
     sku: String,
     width: u32,
 ) -> impl std::future::Future<Output = Result<Option<Payload>>> + Send {
     bridge(async move {
-        let Some(data) = original(&sku).await? else {
+        let Some(data) = original(&kitchen, &sku).await? else {
             return Ok(None);
         };
         let jpeg = |data: Vec<u8>| Payload { data, content_type: "image/jpeg".to_string() };
 
-        let kitchen = KITCHEN.with(|k| k.borrow().clone());
-        let Some(images) = kitchen.filter(|_| width < WIDTHS[2]) else {
+        let Some(images) = kitchen.images.filter(|_| width < WIDTHS[2]) else {
             return Ok(Some(jpeg(data)));
         };
         match cook(&images, &data, width, "image/webp", WEBP_QUALITY).await {
@@ -174,20 +183,23 @@ fn served(
 }
 
 /// Takes an upload into the bucket, bounded to the largest served width.
-pub fn store(sku: &str, raw: Vec<u8>) -> impl std::future::Future<Output = Result<()>> + Send {
+pub fn store(
+    cx: &Cx,
+    sku: &str,
+    raw: Vec<u8>,
+) -> impl std::future::Future<Output = Result<()>> + Send {
     let key = key_for(sku);
+    let kitchen = SendWrapper::new(bindings(cx));
     bridge(async move {
+        let Kitchen { images, photos } = kitchen.0;
         // No decoder on board: the binding is what bounds an upload here.
-        let kitchen = KITCHEN.with(|k| k.borrow().clone());
-        let bytes = match kitchen {
+        let bytes = match images {
             Some(images) => cook(&images, &raw, WIDTHS[2], "image/jpeg", UPLOAD_QUALITY)
                 .await
                 .unwrap_or(raw),
             None => raw,
         };
-        let bucket = PHOTOS
-            .with(|b| b.borrow().clone())
-            .ok_or_else(|| Error::msg("no PHOTOS bucket bound"))?;
+        let bucket = photos.ok_or_else(|| Error::msg("no PHOTOS bucket bound"))?;
         bucket.put(key, bytes).execute().await.map_err(|e| Error::msg(format!("r2 put: {e}")))?;
         Ok(())
     })
@@ -205,5 +217,5 @@ async fn photo(cx: &Cx) -> Result<Payload> {
         })
         .unwrap_or(900);
     let width = WIDTHS.into_iter().min_by_key(|w| w.abs_diff(requested)).unwrap();
-    Ok(served(sku, width).await?.ok_or_not_found()?)
+    Ok(served(bindings(cx), sku, width).await?.ok_or_not_found()?)
 }
