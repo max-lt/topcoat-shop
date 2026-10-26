@@ -48,6 +48,7 @@ mod worker_adapter {
 
     use http::{Method, StatusCode};
     use topcoat::router::{Body, Router};
+    use topcoat::runtime::RUNTIME_PROTOCOL;
     use worker::{
         console_log, event, AbortSignal, Context, Env, HttpRequest, Result, ScheduleContext,
         ScheduledEvent,
@@ -61,6 +62,18 @@ mod worker_adapter {
         ROUTER.get_or_init(|| crate::router().build())
     }
 
+    /// Whether the request opens the runtime's WebSocket. A Worker cannot
+    /// hold one for the runtime, so the adapter answers 501 itself rather
+    /// than let the upgrade fail somewhere inside the router.
+    fn asks_for_runtime_socket(headers: &http::HeaderMap) -> bool {
+        headers
+            .get_all(http::header::SEC_WEBSOCKET_PROTOCOL)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(|value| value.split(','))
+            .any(|protocol| protocol.trim() == RUNTIME_PROTOCOL)
+    }
+
     /// The whole shop as a pure function: an http::Request in, the router's
     /// handle(), an http::Response out. No server underneath. Both bodies
     /// stream: an upload reaches the router as it arrives, and a page
@@ -68,6 +81,13 @@ mod worker_adapter {
     #[event(fetch)]
     async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<http::Response<Body>> {
         console_error_panic_hook::set_once();
+        if asks_for_runtime_socket(req.headers()) {
+            return Ok(http::Response::builder()
+                .status(StatusCode::NOT_IMPLEMENTED)
+                .header(http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+                .body(Body::from("This host serves no runtime WebSocket."))?);
+        }
+
         // The bindings ride with the request: pool(cx) and the photo
         // routes read them from its context.
         let bindings = (crate::db::Db::new(env.d1("DB")?), crate::images::Bindings::new(&env));
