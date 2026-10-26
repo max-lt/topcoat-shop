@@ -256,7 +256,7 @@ struct Term<'a> {
 
 /// The header's panel, re-rendered by the server on every keystroke. It
 /// draws its own box, so an empty field leaves nothing behind.
-#[shard]
+#[shard("/rpc/recherche/suggestions")]
 async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
     let term = term.trim().to_string();
     let found = if term.is_empty() { Vec::new() } else { db::search(pool(cx), &term).await? };

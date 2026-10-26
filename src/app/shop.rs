@@ -238,7 +238,7 @@ async fn search(cx: &Cx) -> Result<impl View> {
 
 /// Sets what the cart holds of one line and hands back what was kept: the
 /// server clamps to the stock and retires the line at zero.
-#[procedure]
+#[procedure("/rpc/produit/ligne")]
 async fn set_line(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
     let cart = current_cart(cx);
     Ok(db::set_quantity(pool(cx), &cart, &sku, &size, quantity as i64).await? as f64)
@@ -246,7 +246,7 @@ async fn set_line(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f
 
 /// What the cart holds of one line. Picking another size asks for its
 /// count rather than trusting what the page was rendered with.
-#[procedure]
+#[procedure("/rpc/produit/dans-le-panier")]
 async fn in_cart(cx: &Cx, sku: String, size: String) -> Result<f64> {
     let cart = current_cart(cx);
     let lines = db::cart_lines(pool(cx), &cart).await?;

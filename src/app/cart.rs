@@ -14,13 +14,13 @@ use crate::app::context::{current_cart, current_user, forget_cart, pool};
 use crate::app::{icon, page_heading, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SHELL, SOFT};
 use crate::db::{self, format_price};
 
-#[procedure]
+#[procedure("/rpc/panier/quantite")]
 async fn set_quantity(cx: &Cx, sku: String, size: String, quantity: f64) -> Result<f64> {
     let cart_id = current_cart(cx);
     Ok(db::set_quantity(pool(cx), &cart_id, &sku, &size, quantity as i64).await? as f64)
 }
 
-#[procedure]
+#[procedure("/rpc/panier/retirer")]
 async fn remove(cx: &Cx, sku: String, size: String) -> Result<f64> {
     let cart_id = current_cart(cx);
     db::remove_from_cart(pool(cx), &cart_id, &sku, &size).await?;
@@ -29,7 +29,7 @@ async fn remove(cx: &Cx, sku: String, size: String) -> Result<f64> {
 
 /// The bill: line totals, shipping, and what it all comes to. `version` is
 /// the signal the steppers bump; `mode` is the shipping choice.
-#[shard]
+#[shard("/rpc/panier/total")]
 async fn bill(cx: &Cx, version: f64, mode: String) -> Result<impl View> {
     let _ = version;
     let cart_id = current_cart(cx);

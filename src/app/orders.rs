@@ -52,13 +52,13 @@ fn rung(status: &str) -> f64 {
     }
 }
 
-#[procedure]
+#[procedure("/rpc/commande/avancer")]
 async fn advance(cx: &Cx, reference: String) -> Result<f64> {
     let user = current_user(cx).await?.ok_or_unauthorized()?;
     Ok(rung(&db::advance_order(pool(cx), user.id, &reference).await?))
 }
 
-#[shard]
+#[shard("/rpc/commande/suivi")]
 async fn tracking(cx: &Cx, reference: String, version: f64) -> Result<impl View> {
     let _ = version;
     let user = current_user(cx).await?.ok_or_unauthorized()?;
