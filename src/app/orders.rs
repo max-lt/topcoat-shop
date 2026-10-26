@@ -10,7 +10,7 @@ use topcoat::view::{component, view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_user, pool};
-use crate::app::{BTN_OUTLINE, CARD, EYEBROW, MUTED, SOFT};
+use crate::app::{to, BTN_OUTLINE, CARD, EYEBROW, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 const STEPS: [(&str, &str); 4] = [
@@ -274,7 +274,7 @@ async fn order_page(cx: &Cx) -> Result<impl View> {
                     </p>
                 </div>
 
-                <a href="/compte" class=(BTN_OUTLINE.to_string() + " w-full")>
+                <a (to(cx, "/compte")) class=(BTN_OUTLINE.to_string() + " w-full")>
                     "Toutes mes commandes"
                 </a>
             </aside>

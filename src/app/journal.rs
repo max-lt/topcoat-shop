@@ -7,7 +7,7 @@ use topcoat::router::{page, path_param};
 use topcoat::view::{view, View};
 use topcoat::Result;
 
-use crate::app::{page_heading, BTN_OUTLINE, EYEBROW, MUTED, SOFT};
+use crate::app::{page_heading, to, BTN_OUTLINE, EYEBROW, MUTED, SOFT};
 
 pub const POSTS: [(&str, &str, &str, &str, &str); 3] = [
     (
@@ -49,7 +49,7 @@ pub fn photo_key(tag: &str) -> &'static str {
 }
 
 #[page("/journal")]
-async fn journal() -> Result<impl View> {
+async fn journal(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         page_heading(
             eyebrow: "Journal",
@@ -60,7 +60,7 @@ async fn journal() -> Result<impl View> {
 
         <div class="mt-14 grid gap-10 lg:grid-cols-3">
             for (slug, date, tag, title, lede) in POSTS {
-                <a href=("/journal/".to_string() + slug) class="group block">
+                <a (to(cx, "/journal/".to_string() + slug)) class="group block">
                     <div
                         class="aspect-video overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition group-hover:ring-gin-300"
                         data-vt=(slug)
@@ -158,14 +158,14 @@ async fn post(cx: &Cx) -> Result<impl View> {
                 <p class="mt-3 font-display text-2xl">
                     "Voir les pièces dont on parle"
                 </p>
-                <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-6")>
+                <a (to(cx, "/boutique")) class=(BTN_OUTLINE.to_string() + " mt-6")>
                     "Ouvrir la boutique"
                 </a>
             </div>
 
             <p class="mt-12">
                 <a
-                    href="/journal"
+                    (to(cx, "/journal"))
                     class="text-sm text-gin-700 underline underline-offset-4"
                 >
                     "← Tous les billets"

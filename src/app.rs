@@ -8,8 +8,8 @@ use topcoat::context::Cx;
 use topcoat::router::error::{see_other, NotFoundError, SeeOther};
 use topcoat::router::request::uri;
 use topcoat::router::{content::Form, href, layout, page, query_params, route, Slot, StatusCode};
-use topcoat::runtime::{shard, signal, Event};
-use topcoat::view::{component, error_boundary, view, View};
+use topcoat::runtime::{link_attrs, prefetch_mode, shard, signal, Event};
+use topcoat::view::{component, error_boundary, view, AttributeValueViewParts, Attributes, View};
 use topcoat::Result;
 
 use crate::db::{self, format_price, Product};
@@ -42,6 +42,15 @@ pub const FIELD: &str = "w-full rounded-xl bg-white px-3.5 py-2.5 text-sm ring-1
 pub const EYEBROW: &str = "text-xs font-medium uppercase tracking-[0.2em] text-gin-700";
 pub const SOFT: &str = "text-oat-700";
 pub const MUTED: &str = "text-oat-600";
+
+// --- links
+
+/// The attributes of a link to one of the shop's own pages: the runtime
+/// follows it without reloading the document, and starts loading the page
+/// when the pointer rests on the link.
+pub fn to(cx: &Cx, href: impl AttributeValueViewParts) -> Attributes {
+    link_attrs(cx, href, prefetch_mode(cx))
+}
 
 // --- icons
 
@@ -101,12 +110,12 @@ pub async fn page_heading(eyebrow: &str, title: &str, lede: &str) -> Result<impl
 /// The product tile, used on the home page, the catalog and the related
 /// shelf, so a product looks the same everywhere it appears.
 #[component]
-pub async fn product_tile(p: Product) -> Result<impl View> {
+pub async fn product_tile(cx: &Cx, p: Product) -> Result<impl View> {
     let sold_out = p.sold_out();
     let is_new = p.is_new != 0;
     Ok(view! {
         <a
-            href=("/produit/".to_string() + &p.sku)
+            (to(cx, "/produit/".to_string() + &p.sku))
             class="group block transition duration-300 hover:-translate-y-1"
         >
             <div
@@ -269,7 +278,7 @@ async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
                 } else {
                     for p in shown {
                         <a
-                            href=("/produit/".to_string() + &p.sku)
+                            (to(cx, "/produit/".to_string() + &p.sku))
                             class="flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-oat-100"
                         >
                             <img
@@ -286,7 +295,7 @@ async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
                         </a>
                     }
                     <a
-                        href=(href!("/recherche").query(Term { q: &term }))
+                        (to(cx, href!("/recherche").query(Term { q: &term })))
                         class=("mt-1 block rounded-xl px-3 py-2 text-sm underline underline-offset-4 ".to_string(
 
                             )
@@ -430,7 +439,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                 <nav class="mt-2">
                                     for (href, label, current) in nav {
                                         <a
-                                            href=(href)
+                                            (to(cx, href))
                                             aria-current=(if current { "page" } else { "" })
                                             class=(if current {
                                                 "block rounded-xl bg-oat-100 px-4 py-2.5 text-sm font-medium"
@@ -442,7 +451,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                         </a>
                                     }
                                     <a
-                                        href="/compte"
+                                        (to(cx, "/compte"))
                                         class="block rounded-xl px-4 py-2.5 text-sm transition hover:bg-oat-100"
                                     >
                                         "Mon compte"
@@ -451,7 +460,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                             </div>
                         </details>
 
-                        <a href="/" class="flex shrink-0 items-center gap-2">
+                        <a (to(cx, "/")) class="flex shrink-0 items-center gap-2">
                             icon(d: SHELL, class: "h-6 w-6 text-gin-700")
                             <span class="font-display text-xl">"Bernard"</span>
                         </a>
@@ -459,7 +468,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                         <nav class="hidden items-center gap-7 text-sm md:flex">
                             for (href, label, current) in nav {
                                 <a
-                                    href=(href)
+                                    (to(cx, href))
                                     aria-current=(if current { "page" } else { "" })
                                     class=(if current {
                                         "font-medium text-gin-800 underline underline-offset-8"
@@ -512,13 +521,13 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                             // The burger carries it below sm, where it would
                             // wrap onto two lines beside the cart.
                             <a
-                                href="/compte"
+                                (to(cx, "/compte"))
                                 class="hidden whitespace-nowrap text-sm transition hover:text-gin-700 sm:inline"
                             >
                                 (if signed_in { "Mon compte" } else { "Connexion" })
                             </a>
                             <a
-                                href="/panier"
+                                (to(cx, "/panier"))
                                 class="inline-flex items-center gap-2 rounded-full bg-oat-900 px-4 py-2 text-sm text-oat-50 transition hover:bg-gin-800"
                             >
                                 "Panier"
@@ -554,7 +563,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                             "Cette page n'existe pas, ou ne fait plus partie de la collection. \
                                          Le reste de la boutique vous attend."
                                         </p>
-                                        <a href="/boutique" class=(BTN.to_string() + " mt-8")>
+                                        <a (to(cx, "/boutique")) class=(BTN.to_string() + " mt-8")>
                                             "Voir la boutique"
                                         </a>
                                     </section>
@@ -583,13 +592,13 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     class=("mt-4 space-y-2.5 text-sm ".to_string() + MUTED)
                                 >
                                     <li>
-                                        <a href="/boutique" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/boutique")) class="transition hover:text-gin-700">
                                             "Tous les articles"
                                         </a>
                                     </li>
                                     <li>
                                         <a
-                                            href="/boutique?categorie=Vêtements"
+                                            (to(cx, "/boutique?categorie=Vêtements"))
                                             class="transition hover:text-gin-700"
                                         >
                                             "Vêtements"
@@ -597,14 +606,14 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     </li>
                                     <li>
                                         <a
-                                            href="/boutique?categorie=Papeterie"
+                                            (to(cx, "/boutique?categorie=Papeterie"))
                                             class="transition hover:text-gin-700"
                                         >
                                             "Papeterie"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/recherche" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/recherche")) class="transition hover:text-gin-700">
                                             "Recherche"
                                         </a>
                                     </li>
@@ -616,22 +625,22 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     class=("mt-4 space-y-2.5 text-sm ".to_string() + MUTED)
                                 >
                                     <li>
-                                        <a href="/aide" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/aide")) class="transition hover:text-gin-700">
                                             "Livraison et retours"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/aide" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/aide")) class="transition hover:text-gin-700">
                                             "Guide des tailles"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/contact" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/contact")) class="transition hover:text-gin-700">
                                             "Nous écrire"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/compte" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/compte")) class="transition hover:text-gin-700">
                                             "Suivre ma commande"
                                         </a>
                                     </li>
@@ -643,23 +652,23 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     class=("mt-4 space-y-2.5 text-sm ".to_string() + MUTED)
                                 >
                                     <li>
-                                        <a href="/maison" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/maison")) class="transition hover:text-gin-700">
                                             "Notre histoire"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/journal" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/journal")) class="transition hover:text-gin-700">
                                             "Journal"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/cgv" class="transition hover:text-gin-700">
+                                        <a (to(cx, "/cgv")) class="transition hover:text-gin-700">
                                             "Conditions de vente"
                                         </a>
                                     </li>
                                     <li>
                                         <a
-                                            href="/mentions-legales"
+                                            (to(cx, "/mentions-legales"))
                                             class="transition hover:text-gin-700"
                                         >
                                             "Mentions légales"
@@ -669,7 +678,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                     if is_admin {
                                         <li>
                                             <a
-                                                href="/admin"
+                                                (to(cx, "/admin"))
                                                 class="text-gin-700 transition hover:text-gin-800"
                                             >
                                                 "Administration"
@@ -767,8 +776,8 @@ async fn home(cx: &Cx) -> Result<impl View> {
                      n'a pas été ajouté — c'est la même règle que pour nos images."
                 </p>
                 <div class="mt-9 flex flex-wrap items-center gap-3">
-                    <a href="/boutique" class=(BTN)>"Découvrir la collection"</a>
-                    <a href="/journal" class=(BTN_OUTLINE)>"Lire le journal"</a>
+                    <a (to(cx, "/boutique")) class=(BTN)>"Découvrir la collection"</a>
+                    <a (to(cx, "/journal")) class=(BTN_OUTLINE)>"Lire le journal"</a>
                 </div>
             </div>
 
@@ -780,7 +789,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     // leap over its neighbour.
                     <div class=(if i % 2 == 1 { "sm:translate-y-6" } else { "" })>
                         <a
-                            href=("/produit/".to_string() + &p.sku)
+                            (to(cx, "/produit/".to_string() + &p.sku))
                             data-bg=(crate::images::background(&p.sku))
                             class="block aspect-square overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-oat-900/10"
                         >
@@ -805,7 +814,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
             <div class="flex flex-wrap items-end justify-between gap-4">
                 <h2 class="text-3xl sm:text-4xl">"Les catégories"</h2>
                 <a
-                    href="/boutique"
+                    (to(cx, "/boutique"))
                     class="text-sm text-gin-700 underline underline-offset-4"
                 >
                     "Tout voir"
@@ -818,7 +827,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
             >
                 for (c, sku) in shelves {
                     <a
-                        href=("/boutique?categorie=".to_string() + &c)
+                        (to(cx, "/boutique?categorie=".to_string() + &c))
                         data-bg=(crate::images::background(&sku))
                         class="group relative block aspect-[4/5] w-40 shrink-0 snap-start overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200 transition duration-300 hover:shadow-xl hover:shadow-oat-900/10 sm:w-48 lg:w-auto"
                     >
@@ -849,7 +858,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     <h2 class="mt-3 text-3xl sm:text-4xl">"Ce qui vient d'arriver"</h2>
                 </div>
                 <a
-                    href="/boutique"
+                    (to(cx, "/boutique"))
                     class="text-sm text-gin-700 underline underline-offset-4"
                 >
                     "Toute la boutique"
@@ -964,7 +973,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     "On raconte ce qu'on mesure et ce qu'on choisit : le coton, l'encre, le \
                      papier, et pourquoi une petite série vaut mieux qu'un grand entrepôt."
                 </p>
-                <a href="/journal" class=(BTN_OUTLINE.to_string() + " mt-8")>
+                <a (to(cx, "/journal")) class=(BTN_OUTLINE.to_string() + " mt-8")>
                     "Lire le journal"
                 </a>
             </div>

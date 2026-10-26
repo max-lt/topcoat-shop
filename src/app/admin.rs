@@ -11,7 +11,7 @@ use topcoat::Result;
 
 use crate::app::context::{current_admin, pool};
 use crate::app::orders::status_badge;
-use crate::app::{BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED};
+use crate::app::{to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED};
 use crate::db::{self, format_price};
 
 const TABS: [(&str, &str); 4] = [
@@ -22,7 +22,7 @@ const TABS: [(&str, &str); 4] = [
 ];
 
 #[component]
-async fn header(active: &str) -> Result<impl View> {
+async fn header(cx: &Cx, active: &str) -> Result<impl View> {
     Ok(view! {
         <p class=(EYEBROW)>"Administration"</p>
         <h1 class="mt-3 text-4xl sm:text-5xl">"La coquille, côté cale"</h1>
@@ -30,7 +30,7 @@ async fn header(active: &str) -> Result<impl View> {
             for (path, label) in TABS {
                 if path == active {
                     <a
-                        href=(path)
+                        (to(cx, path))
                         class="rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
                         aria-current="page"
                     >
@@ -38,7 +38,7 @@ async fn header(active: &str) -> Result<impl View> {
                     </a>
                 } else {
                     <a
-                        href=(path)
+                        (to(cx, path))
                         class="rounded-full px-4 py-1.5 text-sm ring-1 ring-oat-300 transition hover:bg-oat-100"
                     >
                         (label)
@@ -134,7 +134,7 @@ async fn products(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         header(active: "/admin/produits")
 
-        <p class="mt-6"><a href="/admin/nouveau" class=(BTN)>"Nouveau produit"</a></p>
+        <p class="mt-6"><a (to(cx, "/admin/nouveau")) class=(BTN)>"Nouveau produit"</a></p>
 
         <div class="mt-4 overflow-x-auto">
             <table class="w-full text-sm">
@@ -185,7 +185,7 @@ async fn products(cx: &Cx) -> Result<impl View> {
                             <td class=(CELL)>
                                 <div class="flex items-center gap-4">
                                     <a
-                                        href=("/admin/produit/".to_string() + &p.sku)
+                                        (to(cx, "/admin/produit/".to_string() + &p.sku))
                                         class="text-gin-700 underline underline-offset-4"
                                     >
                                         "Modifier"
@@ -246,7 +246,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                     (&p.sku)
                     " — "
                     <a
-                        href=("/produit/".to_string() + &p.sku)
+                        (to(cx, "/produit/".to_string() + &p.sku))
                         class="underline underline-offset-4"
                     >
                         "voir la fiche publique"
@@ -457,7 +457,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
 
         <p class="mt-8">
             <a
-                href="/admin/produits"
+                (to(cx, "/admin/produits"))
                 class="text-sm text-gin-700 underline underline-offset-4"
             >
                 "← Tous les produits"

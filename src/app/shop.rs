@@ -10,7 +10,7 @@ use topcoat::view::{component, suspense, view, View};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, note_seen, pool};
-use crate::app::{page_heading, product_tile, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
+use crate::app::{page_heading, product_tile, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 const SORTS: [(i64, &str); 4] = [
@@ -87,7 +87,7 @@ async fn shop(cx: &Cx) -> Result<impl View> {
         >
             <div class="flex flex-wrap items-center gap-2">
                 <a
-                    href=(link("", sort))
+                    (to(cx, link("", sort)))
                     class=(if category.is_empty() {
                         "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
                     } else {
@@ -98,7 +98,7 @@ async fn shop(cx: &Cx) -> Result<impl View> {
                 </a>
                 for c in categories {
                     <a
-                        href=(link(&c, sort))
+                        (to(cx, link(&c, sort)))
                         class=(if category == c {
                             "rounded-full bg-oat-900 px-4 py-1.5 text-sm text-oat-50"
                         } else {
@@ -115,7 +115,7 @@ async fn shop(cx: &Cx) -> Result<impl View> {
                 <div class="flex flex-wrap gap-3">
                     for (value, label) in SORTS {
                         <a
-                            href=(link(&category, value))
+                            (to(cx, link(&category, value)))
                             class=(if sort == value {
                                 "text-gin-700 underline underline-offset-4"
                             } else {
@@ -207,7 +207,7 @@ async fn search(cx: &Cx) -> Result<impl View> {
                     <p class=("mt-3 ".to_string() + SOFT)>
                         "Essayez « coton », « laiton », « papier », ou parcourez toute la collection."
                     </p>
-                    <a href="/boutique" class=(BTN_OUTLINE.to_string() + " mt-8")>
+                    <a (to(cx, "/boutique")) class=(BTN_OUTLINE.to_string() + " mt-8")>
                         "Voir la boutique"
                     </a>
                 </div>
@@ -416,7 +416,7 @@ async fn reviews_section(
                     </form>
                 } else {
                     <p class=("mt-8 text-sm ".to_string() + MUTED)>
-                        <a href="/connexion" class="underline underline-offset-4">
+                        <a (to(cx, "/connexion")) class="underline underline-offset-4">
                             "Connectez-vous"
                         </a>
                         " pour laisser un avis."
@@ -519,10 +519,10 @@ async fn product(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         <div class="flex items-center justify-between gap-4">
             <nav class=("text-sm ".to_string() + MUTED)>
-                <a href="/boutique" class="transition hover:text-gin-700">"Boutique"</a>
+                <a (to(cx, "/boutique")) class="transition hover:text-gin-700">"Boutique"</a>
                 " / "
                 <a
-                    href=("/boutique?categorie=".to_string() + &p.category)
+                    (to(cx, "/boutique?categorie=".to_string() + &p.category))
                     class="transition hover:text-gin-700"
                 >
                     (&p.category)
@@ -530,7 +530,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
             </nav>
             // The bridge the shopkeeper crosses; nobody else sees it.
             if is_admin {
-                <a href=("/admin/produit/".to_string() + &p.sku) class=(BTN_OUTLINE)>
+                <a (to(cx, "/admin/produit/".to_string() + &p.sku)) class=(BTN_OUTLINE)>
                     "Éditer"
                 </a>
             }
@@ -629,7 +629,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                             <div class="flex items-baseline justify-between">
                                 <p class="text-sm font-medium">"Taille"</p>
                                 <a
-                                    href="/aide#tailles"
+                                    (to(cx, "/aide#tailles"))
                                     class=("text-sm underline underline-offset-4 ".to_string()
                                         + MUTED)
                                 >
@@ -748,7 +748,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                         </div>
 
                         <a
-                            href="/panier"
+                            (to(cx, "/panier"))
                             class=(BTN_OUTLINE.to_string() + " h-11")
                             :hidden=$(held_qty.get() == 0.0)
                         >

@@ -11,7 +11,7 @@ use topcoat::view::{component, view, View, ViewExt};
 use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, forget_cart, pool};
-use crate::app::{icon, page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SHELL, SOFT};
+use crate::app::{icon, page_heading, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SHELL, SOFT};
 use crate::db::{self, format_price};
 
 #[procedure]
@@ -132,7 +132,7 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
     Ok(view! {
         <li id=(format!("line-{}-{}", &l.sku, &l.size)) class="flex gap-5 py-6">
             <a
-                href=("/produit/".to_string() + &l.sku)
+                (to(cx, "/produit/".to_string() + &l.sku))
                 data-bg=(crate::images::background(&l.sku))
                 class="block h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-oat-100 ring-1 ring-oat-200"
             >
@@ -147,7 +147,7 @@ async fn cart_line(cx: &Cx, l: db::CartLine, version: Signal<f64>) -> Result<imp
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <a
-                        href=("/produit/".to_string() + &l.sku)
+                        (to(cx, "/produit/".to_string() + &l.sku))
                         class="text-lg transition hover:text-gin-700"
                     >
                         (&l.name)
@@ -279,7 +279,7 @@ async fn cart(cx: &Cx) -> Result<impl View> {
                 <p class=("mt-6 text-lg ".to_string() + SOFT)>
                     "Votre panier est vide."
                 </p>
-                <a href="/boutique" class=(BTN.to_string() + " mt-8")>
+                <a (to(cx, "/boutique")) class=(BTN.to_string() + " mt-8")>
                     "Voir la collection"
                 </a>
             </div>
@@ -304,14 +304,14 @@ async fn cart(cx: &Cx) -> Result<impl View> {
 
                         if signed_in {
                             <a
-                                href="/commander"
+                                (to(cx, "/commander"))
                                 class=(BTN.to_string() + " mt-6 w-full")
                             >
                                 "Passer commande"
                             </a>
                         } else {
                             <a
-                                href="/connexion"
+                                (to(cx, "/connexion"))
                                 class=(BTN.to_string() + " mt-6 w-full")
                             >
                                 "Se connecter pour commander"
@@ -321,7 +321,7 @@ async fn cart(cx: &Cx) -> Result<impl View> {
                             </p>
                         }
                         <a
-                            href="/boutique"
+                            (to(cx, "/boutique"))
                             class=(BTN_OUTLINE.to_string() + " mt-3 w-full")
                         >
                             "Continuer mes achats"
@@ -367,7 +367,7 @@ async fn checkout_form(
                 title: "Rien à commander",
                 lede: "Votre panier est vide."
             )
-            <a href="/boutique" class=(BTN.to_string() + " mt-8")>
+            <a (to(cx, "/boutique")) class=(BTN.to_string() + " mt-8")>
                 "Voir la collection"
             </a>
         }.boxed());

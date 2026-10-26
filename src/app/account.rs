@@ -11,7 +11,7 @@ use topcoat::Result;
 
 use crate::app::context::{current_cart, current_user, pool};
 use crate::app::orders::status_badge;
-use crate::app::{page_heading, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
+use crate::app::{page_heading, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
 /// What a refused submission hands back to the page it came from. The
@@ -333,7 +333,7 @@ async fn account(cx: &Cx) -> Result<impl View> {
             if no_orders {
                 <div class=(CARD.to_string() + " mt-8 p-16 text-center")>
                     <p class=(SOFT)>"Aucune commande pour l'instant."</p>
-                    <a href="/boutique" class=(BTN.to_string() + " mt-6")>
+                    <a (to(cx, "/boutique")) class=(BTN.to_string() + " mt-6")>
                         "Voir la collection"
                     </a>
                 </div>
@@ -341,7 +341,7 @@ async fn account(cx: &Cx) -> Result<impl View> {
                 <ul class="mt-8 divide-y divide-oat-200 border-y border-oat-200">
                     for o in orders {
                         <a
-                            href=("/commande/".to_string() + &o.reference)
+                            (to(cx, "/commande/".to_string() + &o.reference))
                             class="block transition hover:bg-oat-100"
                         >
                             <li class="flex flex-wrap items-center gap-4 px-2 py-5">
