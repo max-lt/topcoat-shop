@@ -44,11 +44,21 @@ pub fn router() -> RouterBuilder {
 
 #[cfg(feature = "edge")]
 mod worker_adapter {
+    use std::sync::OnceLock;
+
     use http::{Method, StatusCode};
-    use topcoat::router::Body;
+    use topcoat::router::{Body, Router};
     use worker::{
         console_log, event, Context, Env, HttpRequest, Result, ScheduleContext, ScheduledEvent,
     };
+
+    /// Built on the first request a wasm instance serves, and kept for the
+    /// ones after it: discovery walks every route the binary holds, and
+    /// nothing in the router depends on the request.
+    fn router() -> &'static Router {
+        static ROUTER: OnceLock<Router> = OnceLock::new();
+        ROUTER.get_or_init(|| crate::router().build())
+    }
 
     /// The whole shop as a pure function: an http::Request in, the router's
     /// handle(), an http::Response out. No server underneath. Both bodies
@@ -69,7 +79,7 @@ mod worker_adapter {
         let bodiless = head.method == Method::HEAD;
 
         let mut response =
-            crate::router().build().handle(http::Request::from_parts(head, Body::new(body))).await;
+            router().handle(http::Request::from_parts(head, Body::new(body))).await;
 
         // The Workers runtime refuses a body on these statuses, and a HEAD
         // answer must not carry the page it describes.
