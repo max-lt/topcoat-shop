@@ -2,6 +2,8 @@
 name = "topcoat-shop"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.99"
+default-run = "topcoat-shop"
 
 # One shop, two hosts. `native` builds the binary that serves it over
 # tokio and SQLite; `edge` builds the wasm module a Cloudflare Worker runs
