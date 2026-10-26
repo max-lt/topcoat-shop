@@ -32,7 +32,6 @@ edge = [
     "dep:console_error_panic_hook",
     "dep:wasm-bindgen-futures",
     "dep:futures-channel",
-    "dep:futures-util",
 ]
 
 [lib]
@@ -79,7 +78,7 @@ image = { version = "0.25", default-features = false, features = [
     "jpeg",
 ], optional = true }
 
-worker = { version = "0.8", features = ["d1"], optional = true }
+worker = { version = "0.8", features = ["d1", "http"], optional = true }
 http = { version = "1", optional = true }
 http-body-util = { version = "0.1", optional = true }
 # The cookie crate stamps removal cookies with time's now_utc(), which
@@ -88,8 +87,6 @@ time = { version = "0.3", features = ["wasm-bindgen"], optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures-channel = { version = "0.3", optional = true }
-# The Worker adapter maps the router's body stream frame by frame.
-futures-util = { version = "0.3", default-features = false, optional = true }
 
 [dev-dependencies]
 # The health endpoint's answer is json; the tests read it as json.

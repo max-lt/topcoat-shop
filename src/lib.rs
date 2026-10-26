@@ -44,54 +44,44 @@ pub fn router() -> RouterBuilder {
 
 #[cfg(feature = "edge")]
 mod worker_adapter {
-    use futures_util::StreamExt;
+    use http::{Method, StatusCode};
     use topcoat::router::Body;
     use worker::{
-        console_log, event, Context, Env, Error, Headers, Request, Response, Result,
-        ScheduleContext, ScheduledEvent,
+        console_log, event, Context, Env, HttpRequest, Result, ScheduleContext, ScheduledEvent,
     };
 
-    /// The whole shop as a pure function: worker::Request in, the router's
-    /// handle(), worker::Response out. No server underneath.
+    /// The whole shop as a pure function: an http::Request in, the router's
+    /// handle(), an http::Response out. No server underneath. Both bodies
+    /// stream: an upload reaches the router as it arrives, and a page
+    /// leaves frame by frame rather than after its slowest region.
     #[event(fetch)]
-    async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<http::Response<Body>> {
         console_error_panic_hook::set_once();
         crate::db::install(env.d1("DB")?);
         crate::images::install(&env);
 
-        let url = req.url()?;
-        let target = format!(
-            "{}{}",
-            url.path(),
-            url.query().map(|q| format!("?{q}")).unwrap_or_default()
-        );
-        let mut request = http::Request::builder().method(req.method().as_ref()).uri(target);
-        for (name, value) in req.headers().entries() {
-            request = request.header(&name, &value);
+        // The Worker hands over the absolute url. The router is given what
+        // a server would give it: the path and the query.
+        let (mut head, body) = req.into_parts();
+        if let Some(target) = head.uri.path_and_query().cloned() {
+            head.uri = target.into();
         }
-        let body = req.clone()?.bytes().await?;
-        let request =
-            request.body(Body::from(body)).map_err(|e| Error::RustError(e.to_string()))?;
+        let bodiless = head.method == Method::HEAD;
 
-        let response = crate::router().build().handle(request).await;
+        let mut response =
+            crate::router().build().handle(http::Request::from_parts(head, Body::new(body))).await;
 
-        let (head, body) = response.into_parts();
-        let headers = Headers::new();
-        for (name, value) in head.headers.iter() {
-            if let Ok(v) = value.to_str() {
-                headers.append(name.as_str(), v)?;
-            }
+        // The Workers runtime refuses a body on these statuses, and a HEAD
+        // answer must not carry the page it describes.
+        if bodiless
+            || matches!(
+                response.status(),
+                StatusCode::NO_CONTENT | StatusCode::RESET_CONTENT | StatusCode::NOT_MODIFIED
+            )
+        {
+            *response.body_mut() = Body::empty();
         }
-
-        // Hand the router's body to the Worker frame by frame. Collecting it
-        // first would render a streamed page correctly and still make the
-        // reader wait for its slowest region before the first byte.
-        let frames = body
-            .into_data_stream()
-            .map(|frame| frame.map_err(|e| Error::RustError(e.to_string())));
-        Ok(Response::from_stream(frames)?
-            .with_status(head.status.as_u16())
-            .with_headers(headers))
+        Ok(response)
     }
 
     /// The parcels march on their own, on the cron declared in
