@@ -45,7 +45,7 @@ name = "static-bundle"
 required-features = ["native"]
 
 [dependencies]
-topcoat = { version = "0.8.1", default-features = false, features = [
+topcoat = { version = "0.11.0", default-features = false, features = [
     "router",
     "view",
     "runtime",
@@ -59,7 +59,6 @@ argon2 = "0.6.0"
 chrono = { version = "0.4.45", features = ["serde", "wasmbind"] }
 rand = "0.10.2"
 serde = { version = "1.0.229", features = ["derive"] }
-anyhow = "1.0.104"
 
 tokio = { version = "1.53.1", features = [
     "rt-multi-thread",
@@ -95,7 +94,7 @@ futures-util = { version = "0.3", default-features = false, optional = true }
 serde_json = "1"
 
 [build-dependencies]
-topcoat = { version = "0.8.1", default-features = false, features = ["tailwind"] }
+topcoat = { version = "0.11.0", default-features = false, features = ["tailwind"] }
 
 # Image decoding and resizing are unusably slow unoptimised -- an admin
 # upload took half a minute in dev mode. These packages alone get -O3 in

@@ -33,7 +33,7 @@ fn d1() -> Rc<D1Database> {
 }
 
 fn err(e: worker::Error) -> Error {
-    anyhow::anyhow!("D1: {e}")
+    Error::msg(format!("D1: {e}"))
 }
 
 fn s(text: &str) -> JsValue {
@@ -57,7 +57,7 @@ where
     wasm_bindgen_futures::spawn_local(async move {
         let _ = tx.send(work.await);
     });
-    async move { rx.await.map_err(|_| anyhow::anyhow!("bridge closed"))? }
+    async move { rx.await.map_err(|_| Error::msg("bridge closed"))? }
 }
 
 fn fetch_all<T: DeserializeOwned + Send + 'static>(
@@ -313,7 +313,7 @@ pub async fn subscribe(_: Db, email: &str) -> Result<bool, Error> {
 pub async fn register(_: Db, email: &str, name: &str, password: &str) -> Result<User, Error> {
     let hash = Argon2::default()
         .hash_password(password.as_bytes())
-        .map_err(|e| anyhow::anyhow!("hashing: {e}"))?
+        .map_err(|e| Error::msg(format!("hashing: {e}")))?
         .to_string();
     execute(
         "insert into users (email, name, password_hash, created_at) values (?1, ?2, ?3, ?4)",
@@ -439,7 +439,7 @@ pub async fn place_order(
 ) -> Result<Option<String>, Error> {
     let lines = cart_lines(Db, cart_id).await?;
     if lines.is_empty() {
-        return Err(anyhow::anyhow!("empty cart"));
+        return Err(Error::msg("empty cart"));
     }
     let subtotal: i64 = lines.iter().map(CartLine::subtotal).sum();
     let mode = shipping_mode(shipping);
@@ -558,7 +558,7 @@ pub async fn order(
 /// waiting on a real warehouse.
 pub async fn advance_order(_: Db, user_id: i64, reference: &str) -> Result<String, Error> {
     let Some((order, ..)) = order(Db, user_id, reference).await? else {
-        return Err(anyhow::anyhow!("unknown order"));
+        return Err(Error::msg("unknown order"));
     };
     let Some((next, note)) = next_step(&order.status) else {
         return Ok(order.status);

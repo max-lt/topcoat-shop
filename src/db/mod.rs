@@ -14,9 +14,9 @@ mod d1;
 #[cfg(feature = "edge")]
 pub use d1::*;
 
-/// anyhow, so `?` converts straight into topcoat's error type at the
-/// call sites without a per-module helper.
-pub type Error = anyhow::Error;
+/// Topcoat's own error, so `?` carries a db failure into a page or a
+/// procedure as it is, and a sqlx error into this as it is.
+pub type Error = topcoat::Error;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "native", derive(sqlx::FromRow))]

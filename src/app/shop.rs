@@ -637,9 +637,9 @@ async fn product(cx: &Cx) -> Result<impl View> {
                                 </a>
                             </div>
                             <div class="mt-3 flex flex-wrap gap-2">
+                                #[key(&v.size)]
                                 for v in variants.iter().filter(|v| !v.size.is_empty()) {
                                     size_option(
-                                        key: &v.size,
                                         v: v.clone(),
                                         sku_sig: sku_sig.clone(),
                                         size: size.clone(),

@@ -286,9 +286,9 @@ async fn cart(cx: &Cx) -> Result<impl View> {
         } else {
             <div class="mt-10 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
                 <ul class="divide-y divide-oat-200 border-y border-oat-200">
+                    #[key((&l.sku, &l.size))]
                     for l in lines {
                         cart_line(
-                            key: format!("{}-{}", &l.sku, &l.size),
                             l: l,
                             version: version.clone()
                         )

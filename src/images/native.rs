@@ -117,7 +117,7 @@ fn bake(key: &str, bytes: &[u8]) {
 /// the largest served width.
 pub async fn store(sku: &str, raw: Vec<u8>) -> Result<()> {
     let key = sku.to_ascii_lowercase();
-    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+    tokio::task::spawn_blocking(move || -> Result<()> {
         let bytes = normalize(&raw)?;
         adopt(&key, &bytes)?;
         Ok(())

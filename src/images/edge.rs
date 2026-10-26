@@ -11,7 +11,7 @@ use topcoat::context::Cx;
 use topcoat::router::error::RouterErrorExt;
 use topcoat::router::response::{IntoResponse, Response};
 use topcoat::router::{path_param, route, Body};
-use topcoat::Result;
+use topcoat::{Error, Result};
 use worker::js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
 use worker::wasm_bindgen::{JsCast, JsValue};
 
@@ -82,7 +82,7 @@ where
     wasm_bindgen_futures::spawn_local(async move {
         let _ = tx.send(work.await);
     });
-    async move { rx.await.map_err(|_| anyhow::anyhow!("bridge closed"))? }
+    async move { rx.await.map_err(|_| Error::msg("bridge closed"))? }
 }
 
 /// One pass through the image binding: bytes in, the asked width out, in
@@ -136,7 +136,7 @@ async fn original(sku: &str) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     };
     let object =
-        bucket.get(key_for(sku)).execute().await.map_err(|e| anyhow::anyhow!("r2 get: {e}"))?;
+        bucket.get(key_for(sku)).execute().await.map_err(|e| Error::msg(format!("r2 get: {e}")))?;
     // The body borrows the object, so the object has to outlive the read.
     let Some(found) = object else {
         return Ok(None);
@@ -144,7 +144,7 @@ async fn original(sku: &str) -> Result<Option<Vec<u8>>> {
     let Some(body) = found.body() else {
         return Ok(None);
     };
-    Ok(Some(body.bytes().await.map_err(|e| anyhow::anyhow!("r2 body: {e}"))?))
+    Ok(Some(body.bytes().await.map_err(|e| Error::msg(format!("r2 body: {e}")))?))
 }
 
 /// Pulls the original out of the bucket and serves it at the asked width.
@@ -187,8 +187,8 @@ pub fn store(sku: &str, raw: Vec<u8>) -> impl std::future::Future<Output = Resul
         };
         let bucket = PHOTOS
             .with(|b| b.borrow().clone())
-            .ok_or_else(|| anyhow::anyhow!("no PHOTOS bucket bound"))?;
-        bucket.put(key, bytes).execute().await.map_err(|e| anyhow::anyhow!("r2 put: {e}"))?;
+            .ok_or_else(|| Error::msg("no PHOTOS bucket bound"))?;
+        bucket.put(key, bytes).execute().await.map_err(|e| Error::msg(format!("r2 put: {e}")))?;
         Ok(())
     })
 }

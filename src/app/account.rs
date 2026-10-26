@@ -26,10 +26,10 @@ struct Refused(&'static str);
 /// re-submits the form. That is what Post/Redirect/Get exists to avoid, and
 /// it costs nothing here: submitting a rejected password again is rejected
 /// again. A submission that succeeds still redirects.
-fn refuse(cx: &Cx, why: &'static str) -> topcoat::Error {
+fn refuse(why: &'static str) -> topcoat::Error {
     rewrite("/connexion", Body::empty())
         .method(Method::GET)
-        .cx(cx.with(Refused(why)))
+        .with(Refused(why))
         .into()
 }
 
@@ -155,7 +155,7 @@ struct Registration {
 #[route(POST "/connexion/verifier")]
 async fn sign_in(cx: &Cx, Form(f): Form<Credentials>) -> Result<SeeOther> {
     let Some(user) = db::verify_credentials(pool(cx), &f.email, &f.password).await? else {
-        return Err(refuse(cx, "Identifiants incorrects."));
+        return Err(refuse("Identifiants incorrects."));
     };
     start_session(cx, user.id).await?;
     Ok(see_other("/compte"))
@@ -164,10 +164,10 @@ async fn sign_in(cx: &Cx, Form(f): Form<Credentials>) -> Result<SeeOther> {
 #[route(POST "/inscription")]
 async fn register(cx: &Cx, Form(f): Form<Registration>) -> Result<SeeOther> {
     if f.password.len() < 8 {
-        return Err(refuse(cx, "Mot de passe trop court."));
+        return Err(refuse("Mot de passe trop court."));
     }
     if db::email_taken(pool(cx), &f.email).await? {
-        return Err(refuse(cx, "Cet email a déjà un compte."));
+        return Err(refuse("Cet email a déjà un compte."));
     }
     let user = db::register(pool(cx), &f.email, &f.name, &f.password).await?;
     start_session(cx, user.id).await?;

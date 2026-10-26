@@ -144,7 +144,7 @@ pub async fn register(
 ) -> Result<User, Error> {
     let hash = Argon2::default()
         .hash_password(password.as_bytes())
-        .map_err(|e| anyhow::anyhow!("hashing: {e}"))?
+        .map_err(|e| Error::msg(format!("hashing: {e}")))?
         .to_string();
 
     let id: i64 = sqlx::query_scalar(
@@ -497,7 +497,7 @@ pub async fn place_order(
 ) -> Result<Option<String>, Error> {
     let lines = cart_lines(pool, cart_id).await?;
     if lines.is_empty() {
-        return Err(anyhow::anyhow!("empty cart"));
+        return Err(Error::msg("empty cart"));
     }
     let subtotal: i64 = lines.iter().map(CartLine::subtotal).sum();
     let mode = shipping_mode(shipping);
@@ -631,7 +631,7 @@ pub async fn advance_order(
     reference: &str,
 ) -> Result<String, Error> {
     let Some((order, ..)) = order(pool, user_id, reference).await? else {
-        return Err(anyhow::anyhow!("unknown order"));
+        return Err(Error::msg("unknown order"));
     };
     let Some((next, note)) = next_step(&order.status) else {
         return Ok(order.status);
