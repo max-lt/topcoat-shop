@@ -27,6 +27,7 @@ edge = [
     "topcoat/multipart",
     "dep:worker",
     "dep:http",
+    "dep:http-body",
     "dep:http-body-util",
     "dep:time",
     "dep:console_error_panic_hook",
@@ -80,6 +81,7 @@ image = { version = "0.25", default-features = false, features = [
 
 worker = { version = "0.8", features = ["d1", "http"], optional = true }
 http = { version = "1", optional = true }
+http-body = { version = "1", optional = true }
 http-body-util = { version = "0.1", optional = true }
 # The cookie crate stamps removal cookies with time's now_utc(), which
 # panics on bare wasm unless time reads the clock through JS.

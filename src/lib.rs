@@ -49,7 +49,8 @@ mod worker_adapter {
     use http::{Method, StatusCode};
     use topcoat::router::{Body, Router};
     use worker::{
-        console_log, event, Context, Env, HttpRequest, Result, ScheduleContext, ScheduledEvent,
+        console_log, event, AbortSignal, Context, Env, HttpRequest, Result, ScheduleContext,
+        ScheduledEvent,
     };
 
     /// Built on the first request a wasm instance serves, and kept for the
@@ -77,6 +78,7 @@ mod worker_adapter {
             head.uri = target.into();
         }
         let bodiless = head.method == Method::HEAD;
+        let signal = head.extensions.get::<AbortSignal>().cloned();
 
         let mut response =
             router().handle(http::Request::from_parts(head, Body::new(body))).await;
@@ -90,8 +92,121 @@ mod worker_adapter {
             )
         {
             *response.body_mut() = Body::empty();
+        } else if let Some(signal) = signal {
+            let body = std::mem::take(response.body_mut());
+            *response.body_mut() = disconnect::until(signal, body)?;
         }
         Ok(response)
+    }
+
+    /// A reader who leaves mid-page should not cost the rest of the page.
+    /// The runtime does not always cancel the response stream when the
+    /// client goes away, but it always fires the request's abort signal.
+    mod disconnect {
+        use std::cell::RefCell;
+        use std::pin::Pin;
+        use std::rc::Rc;
+        use std::task::{Context, Poll, Waker};
+
+        use http_body::{Body as _, Frame, SizeHint};
+        use topcoat::router::Body;
+        use worker::send::SendWrapper;
+        use worker::wasm_bindgen::closure::Closure;
+        use worker::wasm_bindgen::JsCast;
+        use worker::AbortSignal;
+
+        /// What the stream reads from, until the abort takes it away.
+        struct Pending {
+            body: Option<Body>,
+            waker: Option<Waker>,
+        }
+
+        /// The body, dropped on abort: dropping it drops the render
+        /// futures behind it, and the stream then ends.
+        pub fn until(signal: AbortSignal, body: Body) -> worker::Result<Body> {
+            if signal.aborted() {
+                return Ok(Body::empty());
+            }
+            if body.is_end_stream() {
+                return Ok(body);
+            }
+
+            let pending = Rc::new(RefCell::new(Pending { body: Some(body), waker: None }));
+            let weak = Rc::downgrade(&pending);
+            let on_abort = Closure::<dyn FnMut()>::new(move || {
+                let Some(pending) = weak.upgrade() else { return };
+                let (body, waker) = {
+                    let mut pending = pending.borrow_mut();
+                    (pending.body.take(), pending.waker.take())
+                };
+                // Dropped outside the borrow: a render future's destructor
+                // may call back into the host.
+                drop(body);
+                if let Some(waker) = waker {
+                    waker.wake();
+                }
+            });
+            signal.add_event_listener_with_callback("abort", on_abort.as_ref().unchecked_ref())?;
+
+            Ok(Body::new(Guarded {
+                pending: SendWrapper::new(pending),
+                _listener: SendWrapper::new(Listener { signal, on_abort }),
+            }))
+        }
+
+        /// Takes the listener off the signal once the response is done.
+        struct Listener {
+            signal: AbortSignal,
+            on_abort: Closure<dyn FnMut()>,
+        }
+
+        impl Drop for Listener {
+            fn drop(&mut self) {
+                let _ = self.signal.remove_event_listener_with_callback(
+                    "abort",
+                    self.on_abort.as_ref().unchecked_ref(),
+                );
+            }
+        }
+
+        // A Worker runs on one thread; SendWrapper says so to Body::new.
+        struct Guarded {
+            pending: SendWrapper<Rc<RefCell<Pending>>>,
+            _listener: SendWrapper<Listener>,
+        }
+
+        impl http_body::Body for Guarded {
+            type Data = <Body as http_body::Body>::Data;
+            type Error = <Body as http_body::Body>::Error;
+
+            fn poll_frame(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+                let mut pending = self.pending.borrow_mut();
+                pending.waker = Some(cx.waker().clone());
+                let Some(body) = pending.body.as_mut() else {
+                    return Poll::Ready(None);
+                };
+                let frame = Pin::new(body).poll_frame(cx);
+                if let Poll::Ready(None) = frame {
+                    pending.body = None;
+                    pending.waker = None;
+                }
+                frame
+            }
+
+            fn is_end_stream(&self) -> bool {
+                self.pending.borrow().body.as_ref().is_none_or(|body| body.is_end_stream())
+            }
+
+            fn size_hint(&self) -> SizeHint {
+                match &self.pending.borrow().body {
+                    Some(body) => body.size_hint(),
+                    None => SizeHint::with_exact(0),
+                }
+            }
+        }
     }
 
     /// The parcels march on their own, on the cron declared in

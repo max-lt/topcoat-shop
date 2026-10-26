@@ -2710,6 +2710,7 @@ dependencies = [
  "console_error_panic_hook",
  "futures-channel",
  "http",
+ "http-body",
  "http-body-util",
  "image",
  "rand 0.10.3",
