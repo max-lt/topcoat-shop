@@ -42,6 +42,14 @@ pub fn router() -> RouterBuilder {
 
 // --- the Worker entry point
 
+/// The Worker's execution context for the request being served. Its
+/// `wait_until` keeps the Worker alive for work that finishes after the
+/// response has left.
+#[cfg(feature = "edge")]
+pub fn execution_context(cx: &topcoat::context::Cx) -> &worker::Context {
+    topcoat::context::request_context::<worker::Context>(cx)
+}
+
 #[cfg(feature = "edge")]
 mod worker_adapter {
     use std::sync::OnceLock;
@@ -79,7 +87,7 @@ mod worker_adapter {
     /// stream: an upload reaches the router as it arrives, and a page
     /// leaves frame by frame rather than after its slowest region.
     #[event(fetch)]
-    async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<http::Response<Body>> {
+    async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<http::Response<Body>> {
         console_error_panic_hook::set_once();
         if asks_for_runtime_socket(req.headers()) {
             return Ok(http::Response::builder()
@@ -88,9 +96,10 @@ mod worker_adapter {
                 .body(Body::from("This host serves no runtime WebSocket."))?);
         }
 
-        // The bindings ride with the request: pool(cx) and the photo
-        // routes read them from its context.
-        let bindings = (crate::db::Db::new(env.d1("DB")?), crate::images::Bindings::new(&env));
+        // The bindings ride with the request: pool(cx), the photo routes
+        // and execution_context(cx) read them from its context.
+        let bindings =
+            (crate::db::Db::new(env.d1("DB")?), crate::images::Bindings::new(&env), ctx);
 
         // The Worker hands over the absolute url. The router is given what
         // a server would give it: the path and the query.
