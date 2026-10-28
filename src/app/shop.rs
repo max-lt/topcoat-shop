@@ -9,7 +9,7 @@ use topcoat::runtime::{procedure, signal, Event, Signal};
 use topcoat::view::{component, suspense, view, View};
 use topcoat::Result;
 
-use crate::app::context::{current_cart, current_user, note_seen, pool};
+use crate::app::context::{cart_version, current_cart, current_user, note_seen, pool};
 use crate::app::{page_heading, product_tile, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SOFT};
 use crate::db::{self, format_price};
 
@@ -515,6 +515,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
     let size = signal(cx, || first_size);
     let size_stock = signal(cx, || first_stock);
     let held_qty = signal(cx, || first_held);
+    let version = cart_version(cx);
 
     Ok(view! {
         <div class="flex items-center justify-between gap-4">
@@ -704,6 +705,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                             :hidden=$(held_qty.get() > 0.0)
                             @click=$(async |_e| {
                                 held_qty.set(set_line(sku_sig.get(), size.get(), 1.0).await);
+                                version.increment();
                             })
                         >
                             "Ajouter au panier"
@@ -720,6 +722,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                                     held_qty.set(
                                         set_line(sku_sig.get(), size.get(), held_qty.get() - 1.0).await,
                                     );
+                                    version.increment();
                                 })
                             >
                                 "−"
@@ -741,6 +744,7 @@ async fn product(cx: &Cx) -> Result<impl View> {
                                     held_qty.set(
                                         set_line(sku_sig.get(), size.get(), held_qty.get() + 1.0).await,
                                     );
+                                    version.increment();
                                 })
                             >
                                 "+"

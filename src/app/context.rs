@@ -5,6 +5,7 @@
 use topcoat::context::Cx;
 use topcoat::cookie::{cookie, cookies, Cookie, Cookies};
 use topcoat::router::request::headers;
+use topcoat::runtime::{signal, Signal};
 use topcoat::session;
 use topcoat::Result;
 
@@ -61,6 +62,13 @@ pub async fn current_admin(cx: &Cx) -> Result<Option<User>> {
 pub async fn cart_count(cx: &Cx) -> Result<i64> {
     let id = current_cart(cx);
     Ok(db::item_count(pool(cx), &id).await?)
+}
+
+/// The cart's revision: every control that changes the cart bumps it, and
+/// the header's badge reads it. Header and page reach it through this one
+/// call site with the request's own context, so both hold the same signal.
+pub fn cart_version(cx: &Cx) -> Signal<f64> {
+    signal(cx, || 0.0)
 }
 
 /// Forgets the current cart cookie, after checkout.

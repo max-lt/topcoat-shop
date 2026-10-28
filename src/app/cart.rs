@@ -10,7 +10,7 @@ use topcoat::runtime::{procedure, shard, signal, Signal};
 use topcoat::view::{component, view, View, ViewExt};
 use topcoat::Result;
 
-use crate::app::context::{current_cart, current_user, forget_cart, pool};
+use crate::app::context::{cart_version, current_cart, current_user, forget_cart, pool};
 use crate::app::{icon, page_heading, to, BTN, BTN_OUTLINE, CARD, EYEBROW, FIELD, MUTED, SHELL, SOFT};
 use crate::db::{self, format_price};
 
@@ -258,7 +258,7 @@ async fn cart(cx: &Cx) -> Result<impl View> {
     let signed_in = current_user(cx).await?.is_some();
     let empty = lines.is_empty();
 
-    let version = signal(cx, || 0.0);
+    let version = cart_version(cx);
     let standard = signal(cx, || "standard".to_string());
 
     Ok(view! {

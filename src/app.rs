@@ -25,7 +25,7 @@ pub mod orders;
 pub mod seo;
 pub mod shop;
 
-use context::{cart_count, current_user, pool};
+use context::{cart_count, cart_version, current_user, pool};
 
 // --- tokens
 
@@ -312,6 +312,23 @@ async fn suggestions(cx: &Cx, term: String) -> Result<impl View> {
     })
 }
 
+/// How many pieces the cart holds, re-rendered whenever a control on the
+/// page bumps `version`.
+#[shard("/rpc/panier/compte")]
+async fn cart_badge(cx: &Cx, version: f64) -> Result<impl View> {
+    let _ = version;
+    let items = cart_count(cx).await?;
+    Ok(view! {
+        if items > 0 {
+            <span
+                class="inline-flex h-5 items-center justify-center rounded-full bg-oat-50 px-1.5 text-xs font-medium tabular-nums text-oat-900"
+            >
+                (items)
+            </span>
+        }
+    })
+}
+
 #[layout("/")]
 async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     // Which nav entry points at the page being served. The router answers
@@ -327,7 +344,6 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     let visitor = current_user(cx).await?;
     let signed_in = visitor.is_some();
     let is_admin = visitor.as_ref().is_some_and(|u| u.admin != 0);
-    let items = cart_count(cx).await?;
     let title = page_title(cx).await?;
 
     // og:image rides the URL, like the title: a product page shows its
@@ -352,6 +368,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     // focusin/focusout rather than focus/blur: they bubble, so
     // the panel survives a click on one of its own links.
     let open = signal(cx, || 0.0);
+    let version = cart_version(cx);
 
     Ok(view! {
         <!DOCTYPE html>
@@ -531,13 +548,7 @@ async fn shell(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
                                 class="inline-flex items-center gap-2 rounded-full bg-oat-900 px-4 py-2 text-sm text-oat-50 transition hover:bg-gin-800"
                             >
                                 "Panier"
-                                if items > 0 {
-                                    <span
-                                        class="inline-flex h-5 items-center justify-center rounded-full bg-oat-50 px-1.5 text-xs font-medium tabular-nums text-oat-900"
-                                    >
-                                        (items)
-                                    </span>
-                                }
+                                cart_badge(version: $(version.get()))
                             </a>
                         </div>
                     </div>
